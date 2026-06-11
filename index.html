@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0a0f1a" />
+  <meta name="description" content="Mr. Adrian's STEP Experience — A Louisiana Works TANF simulation game. Build your Family Success Agreement, log your hours, and survive everything life throws at you." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="STEP Experience" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Mr. Adrian's STEP Experience" />
+  <meta property="og:description" content="Louisiana Works TANF simulation. Build your FSA, play arcade quests, survive life invasions." />
+  <meta property="og:type" content="website" />
+
+  <title>Mr. Adrian's STEP Experience</title>
+  <link rel="manifest" href="manifest.json" />
+
+  <!-- Apple touch icons (generated as inline SVG data URIs) -->
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root {
+      height: 100%;
+      width: 100%;
+      background: #0a0f1a;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Loading screen */
+    #loader {
+      position: fixed; inset: 0;
+      background: #0a0f1a;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #f0a500;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    .loader-title {
+      font-size: 22px; font-weight: 900;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, #f0a500, #ffd666, #f0a500);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: shimmer 2s linear infinite;
+      margin-bottom: 8px;
+    }
+    .loader-sub { font-size: 11px; letter-spacing: 3px; color: #4a6a8a; text-transform: uppercase; margin-bottom: 32px; }
+    .loader-bar-track { width: 200px; height: 4px; background: #1a2535; border-radius: 2px; overflow: hidden; }
+    .loader-bar-fill { height: 100%; background: linear-gradient(90deg, #f0a500, #ffd666); border-radius: 2px; animation: load 1.8s ease forwards; }
+    @keyframes shimmer { to { background-position: 200% center; } }
+    @keyframes load { from { width: 0% } to { width: 100% } }
+
+    /* Scrollbar theming */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0a0f1a; }
+    ::-webkit-scrollbar-thumb { background: #2a3a4a; border-radius: 2px; }
+
+    /* Safe area padding for notched phones */
+    #root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  </style>
+</head>
+<body>
+
+  <!-- Loading screen -->
+  <div id="loader">
+    <div style="font-size:48px;margin-bottom:16px">⚜</div>
+    <div class="loader-title">Mr. Adrian's STEP Experience</div>
+    <div class="loader-sub">Strategies to Empower People</div>
+    <div class="loader-bar-track"><div class="loader-bar-fill"></div></div>
+    <div style="font-size:11px;color:#2a4a6a;margin-top:16px;letter-spacing:1px">Louisiana Works · FITAP · TANF</div>
+  </div>
+
+  <div id="root"></div>
+
+  <!-- React 18 from CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel standalone for in-browser JSX transform -->
+  <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"></script>
+
+  <!-- PWA service worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW error:', err));
+      });
+    }
+  </script>
+
+  <!-- The game — loaded as a separate file for caching -->
+  <script type="text/babel" data-type="module" src="app.jsx"></script>
+
+  <!-- Mount + hide loader -->
+  <script>
+    // Poll until App is defined (Babel async transform), then mount
+    const tryMount = () => {
+      if (typeof App !== 'undefined') {
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(App));
+        // Hide loader after brief delay
+        setTimeout(() => {
+          const loader = document.getElementById('loader');
+          if (loader) { loader.classList.add('hidden'); setTimeout(() => loader.remove(), 600); }
+        }, 400);
+      } else {
+        setTimeout(tryMount, 80);
+      }
+    };
+    setTimeout(tryMount, 300);
+  </script>
+
+</body>
+</html>

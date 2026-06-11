@@ -1,0 +1,27 @@
+{
+  "name": "Mr. Adrian's STEP Experience",
+  "short_name": "STEP Experience",
+  "description": "Louisiana Works TANF simulation — build your Family Success Agreement, log hours, play arcade quests, and survive life invasions.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0f1a",
+  "theme_color": "#0a0f1a",
+  "categories": ["education", "games"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "lang": "en-US"
+}
