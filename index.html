@@ -968,41 +968,50 @@ function ArcadeQuest({ goal, mode, onFinish }) {
   // ── render state ──
   const [renderEntities, setRenderEntities] = useState([]);
   const [renderPlayerX, setRenderPlayerX] = useState(FIELD_W / 2 - PLAYER_W / 2);
-  const [caught, setCaught]       = useState(0);
+  const [renderBullets, setRenderBullets]  = useState([]);
+  const [caught, setCaught]         = useState(0);
   const [obstaclesHit, setObstaclesHit] = useState(0);
-  const [timeLeft, setTimeLeft]   = useState(DURATION);
-  const [combo, setCombo]         = useState(0);
-  const [flash, setFlash]         = useState(null);
-  const [status, setStatus]       = useState("ready"); // ready|playing|invasion|done
-  const [invasion, setInvasion]   = useState(null);    // current invasion data
+  const [timeLeft, setTimeLeft]     = useState(DURATION);
+  const [combo, setCombo]           = useState(0);
+  const [flash, setFlash]           = useState(null);
+  const [status, setStatus]         = useState("ready");
+  const [invasion, setInvasion]     = useState(null);
+  const [ammo, setAmmo]             = useState(5);
+  const [explosion, setExplosion]   = useState(null); // {x,y} for blast flash
 
   // ── game refs (never stale) ──
-  const playerXRef   = useRef(FIELD_W / 2 - PLAYER_W / 2);
-  const entitiesRef  = useRef([]);
-  const caughtRef    = useRef(0);
-  const obstHitRef   = useRef(0);
-  const comboRef     = useRef(0);
-  const timeRef      = useRef(DURATION);
-  const statusRef    = useRef("ready");
-  const rafRef       = useRef(null);
-  const fieldRef     = useRef(null);
-  const moveDir      = useRef(0);
-  const lastTime     = useRef(0);
-  const spawnTimer   = useRef(0);
-  const invasionCooldown = useRef(15); // seconds before first invasion can fire
-  const invasionFired = useRef(new Set());
+  const playerXRef    = useRef(FIELD_W / 2 - PLAYER_W / 2);
+  const entitiesRef   = useRef([]);
+  const bulletsRef    = useRef([]);
+  const ammoRef       = useRef(5);
+  const caughtRef     = useRef(0);
+  const obstHitRef    = useRef(0);
+  const comboRef      = useRef(0);
+  const timeRef       = useRef(DURATION);
+  const statusRef     = useRef("ready");
+  const rafRef        = useRef(null);
+  const fieldRef      = useRef(null);
+  const moveDir       = useRef(0);
+  const lastTime      = useRef(0);
+  const spawnTimer    = useRef(0);
+  const invasionCooldown  = useRef(15);
+  const invasionFired     = useRef(new Set());
 
   // sync status ref
   useEffect(() => { statusRef.current = status; }, [status]);
 
   // ── keyboard ──
   useEffect(() => {
-    const dn = (e) => { if (e.key==="ArrowLeft") moveDir.current=-1; if (e.key==="ArrowRight") moveDir.current=1; };
+    const dn = (e) => {
+      if (e.key==="ArrowLeft") moveDir.current=-1;
+      if (e.key==="ArrowRight") moveDir.current=1;
+      if (e.key===" " || e.key==="ArrowUp") { e.preventDefault(); fireBullet(); }
+    };
     const up = (e) => { if ((e.key==="ArrowLeft"&&moveDir.current===-1)||(e.key==="ArrowRight"&&moveDir.current===1)) moveDir.current=0; };
     window.addEventListener("keydown", dn);
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
-  }, []);
+  }, [fireBullet]);
 
   // ── pointer / touch ──
   const handlePointer = useCallback((clientX) => {
@@ -1012,6 +1021,16 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     const nx   = Math.max(0, Math.min(FIELD_W - PLAYER_W, rel - PLAYER_W / 2));
     playerXRef.current = nx;
     setRenderPlayerX(nx);
+  }, []);
+
+  // ── fire bullet on tap/click ──
+  const fireBullet = useCallback(() => {
+    if (statusRef.current !== "playing") return;
+    if (ammoRef.current <= 0) return;
+    ammoRef.current -= 1;
+    setAmmo(ammoRef.current);
+    const bx = playerXRef.current + PLAYER_W / 2 - 5;
+    bulletsRef.current = [...bulletsRef.current, { id: Math.random(), x: bx, y: FIELD_H - 80 }];
   }, []);
 
   // ── flash helper ──
@@ -1145,6 +1164,36 @@ function ArcadeQuest({ goal, mode, onFinish }) {
       let newHit = obstHitRef.current;
       let newCombo = comboRef.current;
       let flashData = null;
+      let newExplosion = null;
+
+      // ── move bullets upward and check obstacle hits ──
+      const BULLET_SPEED = 500;
+      const survivingBullets = [];
+      for (const b of bulletsRef.current) {
+        const ny = b.y - BULLET_SPEED * dt;
+        if (ny < 0) continue; // off screen
+        let hit = false;
+        entitiesRef.current = entitiesRef.current.filter(e => {
+          if (hit) return true;
+          const ex = e.x, ey = e.y;
+          if (e.type === "obstacle" && Math.abs(b.x - ex) < 28 && Math.abs(ny - ey) < 28) {
+            // bullet hit obstacle!
+            newExplosion = { x: ex, y: ey };
+            newCombo++;
+            flashData = { text: "💥 SHOT!", color: "#f0c050" };
+            hit = true;
+            return false; // remove obstacle
+          }
+          return true;
+        });
+        if (!hit) survivingBullets.push({ ...b, y: ny });
+      }
+      bulletsRef.current = survivingBullets;
+      setRenderBullets([...bulletsRef.current]);
+      if (newExplosion) {
+        setExplosion(newExplosion);
+        setTimeout(() => setExplosion(null), 350);
+      }
 
       const next = [];
       for (const e of entitiesRef.current) {
@@ -1160,7 +1209,10 @@ function ArcadeQuest({ goal, mode, onFinish }) {
           } else if (e.type === "power") {
             newCaught += e.val;
             newCombo++;
-            flashData = { text:`⭐ ${theme.powerLabel}! +${e.val}`, color:"#4aaf70" };
+            // refill ammo on power-up
+            ammoRef.current = Math.min(10, ammoRef.current + 3);
+            setAmmo(ammoRef.current);
+            flashData = { text:`⭐ ${theme.powerLabel}! +${e.val} +3🔫`, color:"#4aaf70" };
           } else {
             newHit++;
             newCaught = Math.max(0, newCaught - 1);
@@ -1195,10 +1247,14 @@ function ArcadeQuest({ goal, mode, onFinish }) {
 
   // ── dismiss invasion: apply penalties + surge, resume ──
   const dismissInvasion = useCallback((inv) => {
-    // apply hour/morale hits via caught reduction
     caughtRef.current = Math.max(0, caughtRef.current - Math.floor(inv.hoursLost / 2));
     setCaught(caughtRef.current);
     fireInvasionSurge(inv);
+    // refill ammo after surviving invasion
+    ammoRef.current = 5;
+    setAmmo(5);
+    bulletsRef.current = [];
+    setRenderBullets([]);
     setInvasion(null);
     statusRef.current = "playing";
     setStatus("playing");
@@ -1216,10 +1272,12 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         <div style={{ fontSize:22, fontWeight:800, marginBottom:14, color:"#fff" }}>{goal.label}</div>
         <div style={{ background:"#00000044", borderRadius:10, padding:"16px 18px", fontSize:13, color:"#c8d0d8", lineHeight:1.8, textAlign:"left", marginBottom:20 }}>
           <div>🎯 Catch <strong style={{color:theme.accent}}>{TARGET} {theme.catchLabel}</strong> in {DURATION}s</div>
-          <div>{theme.powerup} Grab <strong style={{color:"#4aaf70"}}>{theme.powerLabel}</strong> for +4 bonus</div>
-          <div>🚗 <strong style={{color:"#f04a4a"}}>Dodge obstacles</strong> — each costs you an hour</div>
+          <div>{theme.powerup} Grab <strong style={{color:"#4aaf70"}}>{theme.powerLabel}</strong> for +4 bonus hours</div>
+          <div>🔫 <strong style={{color:"#f0c050"}}>Tap/click to SHOOT</strong> — destroy obstacles before they hit you</div>
+          <div>🚗 <strong style={{color:"#f04a4a"}}>Dodge what you can't shoot</strong> — each hit costs an hour</div>
+          <div>⭐ Catch power-ups to <strong style={{color:"#4aaf70"}}>refill ammo (+3)</strong></div>
           <div>⚡ <strong style={{color:"#f0c050"}}>LIFE INVASIONS</strong> may interrupt — brace yourself</div>
-          <div style={{marginTop:8,color:"#8a98a8",fontSize:12}}>📱 Drag inside the field &nbsp;·&nbsp; ⌨️ Arrow keys</div>
+          <div style={{marginTop:8,color:"#8a98a8",fontSize:12}}>📱 Drag to move · Tap anywhere to fire 🔫 · ⌨️ Arrows + Space on desktop</div>
         </div>
         <button onClick={() => { statusRef.current="playing"; setStatus("playing"); }} style={arcadeBtn(theme.accent)}>
           Start Quest →
@@ -1308,13 +1366,14 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         <div
           ref={fieldRef}
           onMouseMove={(e) => handlePointer(e.clientX)}
+          onClick={fireBullet}
           onTouchMove={(e) => { e.preventDefault(); handlePointer(e.touches[0].clientX); }}
-          onTouchStart={(e) => { e.preventDefault(); handlePointer(e.touches[0].clientX); }}
+          onTouchStart={(e) => { e.preventDefault(); handlePointer(e.touches[0].clientX); fireBullet(); }}
           style={{
             position:"relative", width:"100%", height:FIELD_H,
             background:`linear-gradient(180deg, ${theme.bg} 0%, #000814 100%)`,
             border:`1px solid ${theme.accent}33`,
-            borderRadius:12, overflow:"hidden", touchAction:"none", cursor:"none",
+            borderRadius:12, overflow:"hidden", touchAction:"none", cursor:"crosshair",
           }}
         >
           {/* subtle scan lines */}
@@ -1322,6 +1381,32 @@ function ArcadeQuest({ goal, mode, onFinish }) {
 
           {/* catch-zone line */}
           <div style={{ position:"absolute", bottom:66, left:0, right:0, height:1, background:`${theme.accent}28` }} />
+
+          {/* bullets */}
+          {renderBullets.map(b => (
+            <div key={b.id} style={{
+              position:"absolute", left:b.x, top:b.y,
+              width:10, height:18,
+              background:`linear-gradient(180deg, #fff, ${theme.accent})`,
+              borderRadius:5,
+              boxShadow:`0 0 8px ${theme.accent}`,
+              pointerEvents:"none",
+            }} />
+          ))}
+
+          {/* explosion flash */}
+          {explosion && (
+            <div style={{
+              position:"absolute",
+              left: `${(explosion.x / FIELD_W) * 100}%`,
+              top: explosion.y - 10,
+              fontSize: 32,
+              pointerEvents:"none",
+              animation:"none",
+            }}>
+              💥
+            </div>
+          )}
 
           {/* entities */}
           {renderEntities.map((e) => (
@@ -1367,8 +1452,17 @@ function ArcadeQuest({ goal, mode, onFinish }) {
           )}
         </div>
 
-        <div style={{ textAlign:"center", fontSize:11, color:"#556", marginTop:8 }}>
-          Drag to move 🧺 &nbsp;·&nbsp; Arrow keys on desktop
+        {/* Ammo bar */}
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:8 }}>
+          <div style={{ fontSize:11, color:"#556" }}>
+            Drag to move 🧺 · Tap to shoot 🔫
+          </div>
+          <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+            <span style={{ fontSize:11, color:"#8a98a8" }}>AMMO</span>
+            {Array.from({length:10}).map((_,i) => (
+              <div key={i} style={{ width:7, height:14, borderRadius:3, background: i < ammo ? theme.accent : "#2a3a4a" }} />
+            ))}
+          </div>
         </div>
       </div>
     </Overlay>
@@ -1941,18 +2035,25 @@ function GamePlay({ participant, fsa, onGameOver }) {
       .filter((g) => g.completed && !goals.find((og) => og.id === g.id)?.completed)
       .reduce((sum, g) => sum + g.points, 0);
 
-    // EBT drain: obstacles cost money from accounts
-    // hoursLost events map to financial hits — bigger events drain more
+    // Natural monthly burn: FITAP ~80% spent on rent/bills, SNAP ~90% on food
+    // Applied before obstacle drain so base is realistic
+    const naturalFitapBurn = Math.round(fitapBalance * 0.80);
+    const naturalSnapBurn  = Math.round(snapBalance  * 0.90);
+
+    // EBT drain from life events on top of natural burn
     const hoursLost = ev.hoursLost || 0;
+    let fitapDrain = naturalFitapBurn;
+    let snapDrain  = naturalSnapBurn;
     if (hoursLost > 0 && ev.type !== "good") {
-      // Each hour lost = ~$8 FITAP drain, ~$12 SNAP drain (scaled by severity)
-      const fitapDrain = Math.min(fitapBalance, Math.round(hoursLost * 7 + Math.random() * 20));
-      const snapDrain  = Math.min(snapBalance,  Math.round(hoursLost * 10 + Math.random() * 25));
-      setFitapBalance(b => Math.max(0, b - fitapDrain));
-      setSnapBalance(b  => Math.max(0, b - snapDrain));
-      setEbtFlash({ fitap: fitapDrain, snap: snapDrain });
+      fitapDrain = Math.min(fitapBalance, naturalFitapBurn + Math.round(hoursLost * 7 + Math.random() * 20));
+      snapDrain  = Math.min(snapBalance,  naturalSnapBurn  + Math.round(hoursLost * 10 + Math.random() * 25));
+      setEbtFlash({ fitap: Math.round(hoursLost * 7), snap: Math.round(hoursLost * 10) });
       setTimeout(() => setEbtFlash(null), 3000);
     }
+    const newFitap = Math.max(0, fitapBalance - fitapDrain);
+    const newSnap  = Math.max(0, snapBalance  - snapDrain);
+    setFitapBalance(newFitap);
+    setSnapBalance(newSnap);
     setHours(newHours);
     setMorale(newMorale);
     setCompliance(newCompliance);
@@ -1966,11 +2067,11 @@ function GamePlay({ participant, fsa, onGameOver }) {
 
   const advanceMonth = () => {
     if (month >= totalMonths) {
-      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, stipendTotal, fitapLifetime, snapLifetime });
+      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, stipendTotal, fitapLifetime, snapLifetime, fitapBalance, snapBalance });
       return;
     }
     if (compliance <= 0) {
-      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, stipendTotal, fitapLifetime, snapLifetime, reason: "terminated" });
+      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, stipendTotal, fitapLifetime, snapLifetime, fitapBalance, snapBalance, reason: "terminated" });
       return;
     }
     const nextMonth = month + 1;
@@ -1982,9 +2083,9 @@ function GamePlay({ participant, fsa, onGameOver }) {
     setLastStipend(null);
     setPhase("monthly");
     setSanctionWarning(false);
-    // Reload EBT accounts for new month
-    setFitapBalance(monthlyBenefits.fitap);
-    setSnapBalance(monthlyBenefits.snap);
+    // EBT monthly deposit — NEW benefits load ON TOP of remaining balance (rollover)
+    setFitapBalance(b => b + monthlyBenefits.fitap);
+    setSnapBalance(b  => b + monthlyBenefits.snap);
     setFitapLifetime(l => l + monthlyBenefits.fitap);
     setSnapLifetime(l  => l + monthlyBenefits.snap);
     if (shouldTriggerBoss(nextMonth)) {
@@ -2119,32 +2220,31 @@ function GamePlay({ participant, fsa, onGameOver }) {
             💳 Louisiana Purchase Card (EBT)
           </div>
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            {/* FITAP Account */}
             <div style={{ background:"#0d1117", borderRadius:8, padding:"10px 12px", border:"1px solid #1a3a5c" }}>
               <div style={{ fontSize:10, color:"#4a9af0", letterSpacing:1, marginBottom:4 }}>FITAP CASH</div>
               <div style={{ fontSize:22, fontWeight:800, color: fitapBalance < monthlyBenefits.fitap * 0.3 ? "#f04a4a" : "#4a9af0" }}>
-                ${fitapBalance}
+                {"$"}{fitapBalance}
               </div>
-              <div style={{ fontSize:10, color:"#556", marginTop:2 }}>of ${monthlyBenefits.fitap}/mo</div>
+              <div style={{ fontSize:10, color:"#556", marginTop:2 }}>of {"$"}{monthlyBenefits.fitap}/mo</div>
               <div style={{ background:"#1a2535", borderRadius:3, height:4, marginTop:6, overflow:"hidden" }}>
                 <div style={{ width:`${Math.max(0,(fitapBalance/monthlyBenefits.fitap)*100)}%`, height:"100%", background:"#4a9af0", transition:"width 0.4s" }} />
               </div>
               {ebtFlash?.fitap > 0 && (
-                <div style={{ fontSize:11, color:"#f04a4a", marginTop:4, fontWeight:700 }}>−${ebtFlash.fitap} obstacle hit!</div>
+                <div style={{ fontSize:11, color:"#f04a4a", marginTop:4, fontWeight:700 }}>{"−$"}{ebtFlash.fitap} obstacle hit!</div>
               )}
             </div>
             {/* SNAP Account */}
             <div style={{ background:"#0d1117", borderRadius:8, padding:"10px 12px", border:"1px solid #1a3a1c" }}>
               <div style={{ fontSize:10, color:"#4aaf70", letterSpacing:1, marginBottom:4 }}>SNAP / FOOD</div>
               <div style={{ fontSize:22, fontWeight:800, color: snapBalance < monthlyBenefits.snap * 0.3 ? "#f04a4a" : "#4aaf70" }}>
-                ${snapBalance}
+                {"$"}{snapBalance}
               </div>
-              <div style={{ fontSize:10, color:"#556", marginTop:2 }}>of ${monthlyBenefits.snap}/mo</div>
+              <div style={{ fontSize:10, color:"#556", marginTop:2 }}>of {"$"}{monthlyBenefits.snap}/mo</div>
               <div style={{ background:"#1a2535", borderRadius:3, height:4, marginTop:6, overflow:"hidden" }}>
                 <div style={{ width:`${Math.max(0,(snapBalance/monthlyBenefits.snap)*100)}%`, height:"100%", background:"#4aaf70", transition:"width 0.4s" }} />
               </div>
               {ebtFlash?.snap > 0 && (
-                <div style={{ fontSize:11, color:"#f04a4a", marginTop:4, fontWeight:700 }}>−${ebtFlash.snap} obstacle hit!</div>
+                <div style={{ fontSize:11, color:"#f04a4a", marginTop:4, fontWeight:700 }}>{"−$"}{ebtFlash.snap} obstacle hit!</div>
               )}
             </div>
           </div>
@@ -2479,7 +2579,10 @@ function GameOver({ result, onRestart, onLeaderboard }) {
     setSubmitState("submitting");
     const entry = {
       name: playerName.trim(),
-      points: result.totalPoints,
+      points: (result.fitapBalance || 0) + (result.snapBalance || 0),
+      ebtTotal: (result.fitapBalance || 0) + (result.snapBalance || 0),
+      fitap: result.fitapBalance || 0,
+      snap: result.snapBalance || 0,
       mode: result.participant?.mode?.label || "Unknown",
       goals: completedGoals.length,
       weeks: result.week,
@@ -2513,14 +2616,15 @@ function GameOver({ result, onRestart, onLeaderboard }) {
         <div style={{ background:"#111827", borderRadius:12, padding:"20px 24px", margin:"20px 0", textAlign:"left" }}>
           <div style={{ fontSize:13, color:"#7a8a9a", marginBottom:14 }}>CASE SUMMARY</div>
           {[
-            { label:"Total Points",      val: result.totalPoints },
-            { label:"Months Completed",  val: `${result.week} / 6` },
-            { label:"Total Hours Logged",val: result.hours },
-            { label:"Stipend Earned",    val: `$${result.stipendTotal || 0}` },
-            { label:"FITAP Received",    val: `$${result.fitapLifetime || 0}` },
-            { label:"SNAP Received",     val: `$${result.snapLifetime || 0}` },
-            { label:"Final Compliance",  val: `${result.compliance}%` },
-            { label:"Goals Achieved",    val: `${completedGoals.length} / ${result.goals.length}` },
+            { label:"🏆 Score (EBT Balance)",  val: `$${(result.fitapBalance||0)+(result.snapBalance||0)}` },
+            { label:"Total Points",       val: result.totalPoints },
+            { label:"Months Completed",   val: `${result.week} / 6` },
+            { label:"Total Hours Logged", val: result.hours },
+            { label:"Stipend Earned",     val: `$${result.stipendTotal || 0}` },
+            { label:"FITAP Remaining",    val: `$${result.fitapBalance || 0}` },
+            { label:"SNAP Remaining",     val: `$${result.snapBalance || 0}` },
+            { label:"Final Compliance",   val: `${result.compliance}%` },
+            { label:"Goals Achieved",     val: `${completedGoals.length} / ${result.goals.length}` },
           ].map(({ label, val }) => (
             <div key={label} style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #1a2535", padding:"8px 0", fontSize:14 }}>
               <span style={{ color:"#7a8a9a" }}>{label}</span>
@@ -2707,11 +2811,13 @@ function Leaderboard({ onBack }) {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:14, color:"#e8eaf0", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
-                    <div style={{ fontSize:11, color:"#556", marginTop:2 }}>{s.mode} · {s.goals} goals · ${s.stipend || 0} stipend · {s.date}</div>
+                    <div style={{ fontSize:11, color:"#556", marginTop:2 }}>
+                      {s.mode} · {s.goals} goals · {"$"}{s.stipend || 0} stipend · {s.date}
+                    </div>
                   </div>
                   <div style={{ textAlign:"right", flexShrink:0 }}>
-                    <div style={{ fontWeight:800, fontSize:16, color:"#f0a500" }}>{s.points}</div>
-                    <div style={{ fontSize:10, color:"#556" }}>pts</div>
+                    <div style={{ fontWeight:800, fontSize:16, color:"#4aaf70" }}>{"$"}{s.points}</div>
+                    <div style={{ fontSize:10, color:"#556" }}>EBT left</div>
                   </div>
                   <div style={{ fontSize:16 }}>{s.success ? "✅" : "📋"}</div>
                 </div>
