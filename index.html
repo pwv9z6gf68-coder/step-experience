@@ -63,6 +63,42 @@ const JSONBIN_API_KEY = "$2a$10$55/OpviJLSjPdE9OgeOUPuBkbbfiQBJMwSVDs95YWluSAT3F
 const JSONBIN_BASE    = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
 const LEADERBOARD_CONFIGURED = !JSONBIN_BIN_ID.includes("PASTE");
 
+
+// ─── NOTIFICATIONS & PLAY COUNTER ────────────────────────────────────────────
+const NTFY_TOPIC = "mradrian-step-louisiana-2026";
+
+async function notifyPlay(participant) {
+  try {
+    const kids = participant.children || 0;
+    const mode = participant.mode ? participant.mode.label : "Unknown";
+    const msg = "🎮 NEW PLAYER: " + participant.name + 
+                " | Mode: " + mode + 
+                " | Kids: " + kids + 
+                " | Barriers: " + (participant.barriers||[]).length +
+                " | " + new Date().toLocaleString("en-US", {timeZone:"America/Chicago", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"});
+    await fetch("https://ntfy.sh/" + NTFY_TOPIC, {
+      method: "POST",
+      headers: { "Title": "Mr. Adrian STEP - New Player!", "Priority": "default", "Tags": "game_die" },
+      body: msg,
+    });
+  } catch(e) { /* silent fail */ }
+}
+
+async function incrementPlayCount() {
+  if (!LEADERBOARD_CONFIGURED) return;
+  try {
+    const res = await fetch(JSONBIN_BASE + "/latest", { headers: { "X-Master-Key": JSONBIN_API_KEY } });
+    const data = await res.json();
+    const current = data.record || {};
+    const newCount = (current.playCount || 0) + 1;
+    await fetch(JSONBIN_BASE, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY },
+      body: JSON.stringify({ ...current, playCount: newCount }),
+    });
+  } catch(e) { /* silent fail */ }
+}
+
 async function fetchScores() {
   if (!LEADERBOARD_CONFIGURED) return [];
   try {
@@ -1965,6 +2001,13 @@ const btnStyle = {
 
 function GamePlay({ participant, fsa, onGameOver }) {
   const totalMonths = 6;
+
+  // Fire play notification and increment counter on mount
+  useEffect(() => {
+    notifyPlay(participant);
+    incrementPlayCount();
+  }, []);
+
   const [month, setMonth] = useState(1);
   const [hours, setHours] = useState(0);
   const [morale, setMorale] = useState(75);
@@ -2957,7 +3000,14 @@ function App() {
     function step3(){pct(70,"Loading compiler...");loadScript("https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js",function(){setTimeout(mountApp,20);});}
     function step2(){pct(40,"Loading ReactDOM...");loadScript("https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js",step3);}
     function step1(){pct(15,"Loading React...");loadScript("https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",step2);}
-    if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        regs.forEach(function(r){r.unregister();});
+      });
+      caches.keys().then(function(keys){
+        keys.forEach(function(k){caches.delete(k);});
+      });
+    }
     window.addEventListener("load",step1);
   </script>
 </body>
