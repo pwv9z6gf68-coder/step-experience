@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -34,12 +34,46 @@
     <div class="lmsg" id="lmsg">Starting up...</div>
   </div>
   <div id="root"></div>
- 
-  <!-- Game source stored as plain text so it does not execute -->
+
   <script id="src" type="text/plain">const { useState, useEffect, useRef, useCallback } = React;
- 
+
+// ─── LEADERBOARD CONFIG ──────────────────────────────────────────────────────
+// Replace these two values with your own from jsonbin.io (free account)
+// Instructions printed in README and on the title screen
+const JSONBIN_BIN_ID  = "6a2af1e7da38895dfeaf4efe";
+const JSONBIN_API_KEY = "$2a$10$55/OpviJLSjPdE9OgeOUPuBkbbfiQBJMwSVDs95YWluSAT3F2K/c.";
+const JSONBIN_BASE    = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+const LEADERBOARD_CONFIGURED = !JSONBIN_BIN_ID.includes("PASTE");
+
+async function fetchScores() {
+  if (!LEADERBOARD_CONFIGURED) return [];
+  try {
+    const res = await fetch(JSONBIN_BASE + "/latest", {
+      headers: { "X-Master-Key": JSONBIN_API_KEY }
+    });
+    const data = await res.json();
+    return Array.isArray(data.record?.scores) ? data.record.scores : [];
+  } catch { return []; }
+}
+
+async function postScore(entry) {
+  if (!LEADERBOARD_CONFIGURED) return false;
+  try {
+    const current = await fetchScores();
+    const updated = [...current, entry]
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 100); // keep top 100 all-time
+    await fetch(JSONBIN_BASE, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Master-Key": JSONBIN_API_KEY },
+      body: JSON.stringify({ scores: updated }),
+    });
+    return true;
+  } catch { return false; }
+}
+
 // ─── DATA ────────────────────────────────────────────────────────────────────
- 
+
 const MODES = [
   {
     id: "standard",
@@ -82,7 +116,7 @@ const MODES = [
     color: "#5c3a1a",
   },
 ];
- 
+
 const GOAL_OPTIONS = [
   { id: "employment",   label: "Obtain full-time employment",          category: "Work",      points: 40 },
   { id: "parttime",     label: "Obtain part-time employment",          category: "Work",      points: 25 },
@@ -96,7 +130,7 @@ const GOAL_OPTIONS = [
   { id: "budget",       label: "Complete financial literacy course",   category: "Financial", points: 15 },
   { id: "resume",       label: "Complete job-ready resume",            category: "Work",      points: 10 },
 ];
- 
+
 const BARRIER_OPTIONS = [
   "No transportation",
   "No childcare",
@@ -109,7 +143,7 @@ const BARRIER_OPTIONS = [
   "Mental health challenges",
   "Unstable housing",
 ];
- 
+
 const ACTION_STEPS = {
   employment: ["Apply to 5 jobs per week", "Attend job fair at LA Works", "Complete mock interview"],
   parttime:   ["Search Indeed/Snagajob", "Contact temp agencies", "Complete application workshop"],
@@ -123,7 +157,7 @@ const ACTION_STEPS = {
   budget:     ["Enroll in MoneyWi$e course", "Complete weekly budget worksheet", "Meet with financial counselor"],
   resume:     ["Attend resume workshop", "Submit draft to coach for review", "Apply skills section"],
 };
- 
+
 const QUEST_THEMES = {
   employment: { token: "⏰", powerup: "💼", bg: "#0d1b2a", accent: "#4a9af0", catchLabel: "work hours",      powerLabel: "Job Offer"     },
   parttime:   { token: "⏰", powerup: "📃", bg: "#0d1b2a", accent: "#4a9af0", catchLabel: "work hours",      powerLabel: "Shift Pickup"  },
@@ -137,7 +171,7 @@ const QUEST_THEMES = {
   budget:     { token: "💵", powerup: "📊", bg: "#2a1b0d", accent: "#f0a500", catchLabel: "class hours",     powerLabel: "Course Done"   },
   resume:     { token: "📄", powerup: "⭐", bg: "#0d1b2a", accent: "#4a9af0", catchLabel: "prep hours",      powerLabel: "Resume Ready"  },
 };
- 
+
 // Obstacles that fall and cost you if caught
 const OBSTACLES = [
   { emoji: "🚗", label: "Car trouble",    cost: 8, size: 26 },
@@ -148,7 +182,7 @@ const OBSTACLES = [
   { emoji: "👮", label: "PO check-in",    cost: 9, size: 28 },
   { emoji: "🍺", label: "Bad influences", cost: 7, size: 24 },
 ];
- 
+
 // Life Invasions — narrative interrupts that pause the game and flood the field
 const LIFE_INVASIONS = [
   {
@@ -264,7 +298,7 @@ const LIFE_INVASIONS = [
     addBarrier: "Criminal background",
   },
 ];
- 
+
 const RANDOM_EVENTS = [
   { text: "🚗 Your car broke down. Miss 8 work hours this week.", hoursLost: 8, moraleLoss: 10, type: "crisis" },
   { text: "👶 Your child's school called — sick day. You had to stay home.", hoursLost: 6, moraleLoss: 8, type: "crisis" },
@@ -277,7 +311,7 @@ const RANDOM_EVENTS = [
   { text: "📞 Job lead from your network! +5 morale.", hoursLost: 0, moraleLoss: -5, type: "good" },
   { text: "🩺 Medical appointment ran long — missed your work shift.", hoursLost: 5, moraleLoss: 7, type: "crisis" },
 ];
- 
+
 const INCAPACITY_EVENTS = [
   { text: "📄 Doctor's note expired. Need new 3rd-party verification within 7 days.", hoursLost: 0, moraleLoss: 15, type: "admin" },
   { text: "🏥 Flare-up today. You can only complete light activities.", hoursLost: 5, moraleLoss: 10, type: "crisis" },
@@ -285,9 +319,9 @@ const INCAPACITY_EVENTS = [
   { text: "📋 ABAWD/disability review triggered. Must respond within 10 days.", hoursLost: 0, moraleLoss: 20, type: "admin" },
   { text: "💊 New treatment plan — physical therapy 2x week. Hours adjusted.", hoursLost: 3, moraleLoss: 0, type: "admin" },
 ];
- 
+
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
- 
+
 const ProgressBar = ({ value, max, color = "#f0a500", label }) => (
   <div style={{ marginBottom: 8 }}>
     {label && <div style={{ fontSize: 11, color: "#aaa", marginBottom: 3 }}>{label}</div>}
@@ -307,7 +341,7 @@ const ProgressBar = ({ value, max, color = "#f0a500", label }) => (
     </div>
   </div>
 );
- 
+
 const Badge = ({ text, color = "#f0a500" }) => (
   <span
     style={{
@@ -323,16 +357,16 @@ const Badge = ({ text, color = "#f0a500" }) => (
     {text}
   </span>
 );
- 
+
 // ─── SCREENS ─────────────────────────────────────────────────────────────────
- 
-function TitleScreen({ onStart }) {
+
+function TitleScreen({ onStart, onLeaderboard }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 120);
     return () => clearInterval(t);
   }, []);
- 
+
   const stars = ["⭐","🌟","✨","💫"];
   const floatStyle = (i) => ({
     position: "absolute",
@@ -344,7 +378,7 @@ function TitleScreen({ onStart }) {
     pointerEvents: "none",
     transition: "opacity 0.2s",
   });
- 
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -358,17 +392,17 @@ function TitleScreen({ onStart }) {
       {Array.from({length:10}).map((_,i) => (
         <div key={i} style={floatStyle(i)}>{stars[i%4]}</div>
       ))}
- 
+
       {/* Gold top accent bar */}
       <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:"linear-gradient(90deg, transparent, #f0a500, #ffd666, #f0a500, transparent)" }} />
- 
+
       {/* Louisiana Works badge */}
       <div style={{ marginBottom:16, display:"flex", alignItems:"center", gap:8 }}>
         <div style={{ width:32, height:32, borderRadius:"50%", background:"linear-gradient(135deg,#1a3a6c,#2a5aac)", border:"2px solid #f0a50066", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>⚜</div>
         <div style={{ fontSize:10, letterSpacing:3, color:"#f0a500", textTransform:"uppercase", fontWeight:700 }}>Louisiana Works · FITAP · TANF</div>
         <div style={{ width:32, height:32, borderRadius:"50%", background:"linear-gradient(135deg,#1a3a6c,#2a5aac)", border:"2px solid #f0a50066", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>⚜</div>
       </div>
- 
+
       {/* Main title */}
       <div style={{ fontSize:13, letterSpacing:6, color:"#8a9ab0", textTransform:"uppercase", marginBottom:6, fontWeight:600 }}>
         Mr. Adrian presents
@@ -390,7 +424,7 @@ function TitleScreen({ onStart }) {
       <div style={{ fontSize:11, letterSpacing:4, color:"#4a6a8a", textTransform:"uppercase", marginBottom:28 }}>
         Strategies to Empower People
       </div>
- 
+
       {/* Description card */}
       <div style={{
         background: "linear-gradient(135deg, #0f1e32 0%, #111f30 100%)",
@@ -420,8 +454,8 @@ function TitleScreen({ onStart }) {
           42 U.S.C. § 607 · Louisiana Works STEP Program · Based on real TANF policy
         </div>
       </div>
- 
-      {/* CTA button */}
+
+      {/* CTA buttons */}
       <button
         onClick={onStart}
         style={{
@@ -438,25 +472,42 @@ function TitleScreen({ onStart }) {
           letterSpacing: 1.5,
           textTransform: "uppercase",
           boxShadow: "0 4px 24px #f0a50055, 0 2px 8px #00000080",
+          marginBottom: 12,
         }}
       >
         Begin Your Case →
       </button>
- 
+      <button
+        onClick={onLeaderboard}
+        style={{
+          background: "transparent",
+          color: "#f0a500",
+          border: "1px solid #f0a50044",
+          borderRadius: 10,
+          padding: "11px 32px",
+          fontSize: 14,
+          fontWeight: 700,
+          cursor: "pointer",
+          letterSpacing: 1,
+        }}
+      >
+        🏆 Hall of Fame
+      </button>
+
       <div style={{ marginTop:16, fontSize:11, color:"#2a4a6a", letterSpacing:1 }}>
         5 tracks · FSA builder · Arcade quests · Life invasions · Compliance boss fight
       </div>
- 
+
       {/* Bottom accent bar */}
       <div style={{ position:"absolute", bottom:0, left:0, right:0, height:3, background:"linear-gradient(90deg, transparent, #f0a500, #ffd666, #f0a500, transparent)" }} />
- 
+
       <style>{`
         @keyframes shimmer { to { background-position: 200% center; } }
       `}</style>
     </div>
   );
 }
- 
+
 function ModeSelect({ onSelect }) {
   const [hover, setHover] = useState(null);
   return (
@@ -479,7 +530,7 @@ function ModeSelect({ onSelect }) {
             Each track has different participation requirements and challenges.
           </div>
         </div>
- 
+
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {MODES.map((m) => (
             <div
@@ -526,18 +577,18 @@ function ModeSelect({ onSelect }) {
     </div>
   );
 }
- 
+
 function ProfileBuilder({ mode, onComplete }) {
   const [name, setName] = useState("");
   const [age, setAge] = useState("");
   const [children, setChildren] = useState("1");
   const [barriers, setBarriers] = useState([]);
- 
+
   const toggleBarrier = (b) =>
     setBarriers((prev) => (prev.includes(b) ? prev.filter((x) => x !== b) : [...prev, b]));
- 
+
   const canProceed = name.trim() && age && barriers.length > 0;
- 
+
   return (
     <div
       style={{
@@ -558,7 +609,7 @@ function ProfileBuilder({ mode, onComplete }) {
             This becomes your case file. Be honest — barriers affect your track.
           </div>
         </div>
- 
+
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {[
             { label: "Participant Name", val: name, set: setName, type: "text", placeholder: "Enter first name" },
@@ -588,7 +639,7 @@ function ProfileBuilder({ mode, onComplete }) {
               />
             </div>
           ))}
- 
+
           <div>
             <label style={{ fontSize: 12, color: "#9aa8b8", display: "block", marginBottom: 8, letterSpacing: 0.5 }}>
               Identified Barriers (select all that apply)
@@ -615,7 +666,7 @@ function ProfileBuilder({ mode, onComplete }) {
             </div>
           </div>
         </div>
- 
+
         <button
           onClick={() =>
             canProceed &&
@@ -641,11 +692,11 @@ function ProfileBuilder({ mode, onComplete }) {
     </div>
   );
 }
- 
+
 function FSABuilder({ participant, onComplete }) {
   const [goals, setGoals] = useState([]);
   const [steps, setSteps] = useState({});
- 
+
   const toggleGoal = (g) => {
     if (goals.find((x) => x.id === g.id)) {
       setGoals((prev) => prev.filter((x) => x.id !== g.id));
@@ -654,7 +705,7 @@ function FSABuilder({ participant, onComplete }) {
       setGoals((prev) => [...prev, { ...g, progress: 0, completed: false }]);
     }
   };
- 
+
   const toggleStep = (goalId, step) => {
     setSteps((prev) => ({
       ...prev,
@@ -663,14 +714,14 @@ function FSABuilder({ participant, onComplete }) {
         : [...(prev[goalId] || []), step],
     }));
   };
- 
+
   const canProceed = goals.length >= 1 && goals.every((g) => (steps[g.id] || []).length >= 1);
- 
+
   const byCategory = GOAL_OPTIONS.reduce((acc, g) => {
     acc[g.category] = [...(acc[g.category] || []), g];
     return acc;
   }, {});
- 
+
   return (
     <div
       style={{
@@ -696,7 +747,7 @@ function FSABuilder({ participant, onComplete }) {
             <Badge text={`${participant.barriers.length} barriers identified`} color="#f04a4a" />
           </div>
         </div>
- 
+
         {Object.entries(byCategory).map(([cat, catGoals]) => (
           <div key={cat} style={{ marginBottom: 22 }}>
             <div style={{ fontSize: 11, letterSpacing: 2, color: "#556", textTransform: "uppercase", marginBottom: 10 }}>
@@ -731,7 +782,7 @@ function FSABuilder({ participant, onComplete }) {
                       <div style={{ fontSize: 18 }}>{selected ? "✓" : "+"}</div>
                     </div>
                   </div>
- 
+
                   {selected && ACTION_STEPS[g.id] && (
                     <div style={{ padding: "0 16px 14px", borderTop: "1px solid #1a2535" }}>
                       <div style={{ fontSize: 11, color: "#556", marginBottom: 8, marginTop: 10, letterSpacing: 1 }}>
@@ -769,7 +820,7 @@ function FSABuilder({ participant, onComplete }) {
             })}
           </div>
         ))}
- 
+
         <button
           onClick={() => canProceed && onComplete({ goals, steps })}
           style={{
@@ -791,11 +842,11 @@ function FSABuilder({ participant, onComplete }) {
     </div>
   );
 }
- 
+
 // ─── ARCADE QUEST ────────────────────────────────────────────────────────────
 // Fully ref-based physics — no stale closures. Single setEntities per frame.
 // Life Invasions interrupt gameplay with narrative events + obstacle surges.
- 
+
 function ArcadeQuest({ goal, mode, onFinish }) {
   const theme = QUEST_THEMES[goal.id] || QUEST_THEMES.employment;
   const FIELD_W = 360;
@@ -803,7 +854,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
   const PLAYER_W = 52;
   const DURATION = 35;
   const TARGET = 12;
- 
+
   // ── render state ──
   const [renderEntities, setRenderEntities] = useState([]);
   const [renderPlayerX, setRenderPlayerX] = useState(FIELD_W / 2 - PLAYER_W / 2);
@@ -814,7 +865,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
   const [flash, setFlash]         = useState(null);
   const [status, setStatus]       = useState("ready"); // ready|playing|invasion|done
   const [invasion, setInvasion]   = useState(null);    // current invasion data
- 
+
   // ── game refs (never stale) ──
   const playerXRef   = useRef(FIELD_W / 2 - PLAYER_W / 2);
   const entitiesRef  = useRef([]);
@@ -830,10 +881,10 @@ function ArcadeQuest({ goal, mode, onFinish }) {
   const spawnTimer   = useRef(0);
   const invasionCooldown = useRef(15); // seconds before first invasion can fire
   const invasionFired = useRef(new Set());
- 
+
   // sync status ref
   useEffect(() => { statusRef.current = status; }, [status]);
- 
+
   // ── keyboard ──
   useEffect(() => {
     const dn = (e) => { if (e.key==="ArrowLeft") moveDir.current=-1; if (e.key==="ArrowRight") moveDir.current=1; };
@@ -842,7 +893,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
   }, []);
- 
+
   // ── pointer / touch ──
   const handlePointer = useCallback((clientX) => {
     if (!fieldRef.current) return;
@@ -852,13 +903,13 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     playerXRef.current = nx;
     setRenderPlayerX(nx);
   }, []);
- 
+
   // ── flash helper ──
   const doFlash = useCallback((text, color) => {
     setFlash({ text, color });
     setTimeout(() => setFlash(null), 600);
   }, []);
- 
+
   // ── spawn helper ──
   const spawnEntity = useCallback((options = {}) => {
     const obstacleRate = mode.id==="crisis" ? 0.54 : mode.id==="sanction" ? 0.50 : 0.40;
@@ -882,7 +933,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     ent.vy  = (120 + Math.random()*90 + (mode.id==="sanction"?40:0)) * speedMod;
     return ent;
   }, [mode.id, theme]);
- 
+
   // ── invasion surge: flood field with themed obstacle emojis ──
   const fireInvasionSurge = useCallback((inv) => {
     const surge = [];
@@ -901,7 +952,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     }
     entitiesRef.current = [...entitiesRef.current, ...surge];
   }, []);
- 
+
   // ── check if an invasion should trigger ──
   const pickInvasion = useCallback(() => {
     const eligible = LIFE_INVASIONS.filter(inv =>
@@ -917,27 +968,27 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     }
     return eligible[eligible.length-1];
   }, [mode.id]);
- 
+
   // ── main physics loop ──
   const startLoop = useCallback(() => {
     lastTime.current = performance.now();
- 
+
     const tick = (now) => {
       if (statusRef.current !== "playing") return;
- 
+
       const dt = Math.min((now - lastTime.current) / 1000, 0.05); // cap dt at 50ms
       lastTime.current = now;
- 
+
       // decrement invasion cooldown
       invasionCooldown.current -= dt;
- 
+
       // keyboard glide
       if (moveDir.current !== 0) {
         const nx = Math.max(0, Math.min(FIELD_W-PLAYER_W, playerXRef.current + moveDir.current*310*dt));
         playerXRef.current = nx;
         setRenderPlayerX(nx);
       }
- 
+
       // countdown
       timeRef.current -= dt;
       if (timeRef.current <= 0) {
@@ -948,7 +999,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         return;
       }
       setTimeLeft(Math.ceil(timeRef.current));
- 
+
       // spawn
       spawnTimer.current += dt;
       const spawnInterval = 0.55 - (Math.max(0, DURATION - timeRef.current) * 0.006);
@@ -969,20 +1020,20 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         }
         entitiesRef.current = [...entitiesRef.current, spawnEntity()];
       }
- 
+
       // physics + collision
       const px = playerXRef.current;
       let newCaught = caughtRef.current;
       let newHit = obstHitRef.current;
       let newCombo = comboRef.current;
       let flashData = null;
- 
+
       const next = [];
       for (const e of entitiesRef.current) {
         const ny = e.y + e.vy * dt;
         const inZone = ny > FIELD_H-84 && ny < FIELD_H-18;
         const overlap = e.x > px-24 && e.x < px+PLAYER_W+8;
- 
+
         if (inZone && overlap) {
           if (e.type === "hour") {
             newCaught++;
@@ -1003,27 +1054,27 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         if (ny > FIELD_H) continue; // off-screen
         next.push({ ...e, y: ny });
       }
- 
+
       entitiesRef.current = next;
- 
+
       // batch state updates only if changed
       if (newCaught !== caughtRef.current) { caughtRef.current = newCaught; setCaught(newCaught); }
       if (newHit !== obstHitRef.current)   { obstHitRef.current = newHit; setObstaclesHit(newHit); }
       if (newCombo !== comboRef.current)   { comboRef.current = newCombo; setCombo(newCombo); }
       if (flashData) doFlash(flashData.text, flashData.color);
- 
+
       setRenderEntities([...entitiesRef.current]);
       rafRef.current = requestAnimationFrame(tick);
     };
- 
+
     rafRef.current = requestAnimationFrame(tick);
   }, [spawnEntity, pickInvasion, doFlash, theme]);
- 
+
   useEffect(() => {
     if (status === "playing") startLoop();
     return () => cancelAnimationFrame(rafRef.current);
   }, [status, startLoop]);
- 
+
   // ── dismiss invasion: apply penalties + surge, resume ──
   const dismissInvasion = useCallback((inv) => {
     // apply hour/morale hits via caught reduction
@@ -1034,11 +1085,11 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     statusRef.current = "playing";
     setStatus("playing");
   }, [fireInvasionSurge]);
- 
+
   const progressGain = Math.min(50, Math.round((caughtRef.current / TARGET) * 35) + (caughtRef.current >= TARGET ? 10 : 0));
- 
+
   // ── SCREENS ──
- 
+
   if (status === "ready") return (
     <Overlay bg={theme.bg}>
       <div style={{ textAlign:"center", maxWidth:380 }}>
@@ -1058,7 +1109,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
       </div>
     </Overlay>
   );
- 
+
   if (status === "invasion" && invasion) return (
     <Overlay bg="#1a0008">
       <div style={{ textAlign:"center", maxWidth:380 }}>
@@ -1078,7 +1129,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
       </div>
     </Overlay>
   );
- 
+
   if (status === "done") {
     const cleared = caughtRef.current >= TARGET;
     return (
@@ -1107,7 +1158,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
       </Overlay>
     );
   }
- 
+
   // ── playing ──
   return (
     <Overlay bg={theme.bg}>
@@ -1130,11 +1181,11 @@ function ArcadeQuest({ goal, mode, onFinish }) {
             <div style={{ fontSize:22, fontWeight:800, color:timeLeft<=8?"#f04a4a":"#fff" }}>{timeLeft}s</div>
           </div>
         </div>
- 
+
         <div style={{ background:"#00000033", borderRadius:5, height:8, marginBottom:8, overflow:"hidden" }}>
           <div style={{ width:`${Math.min(100,(caught/TARGET)*100)}%`, height:"100%", background:theme.accent, borderRadius:5, transition:"width 0.15s" }} />
         </div>
- 
+
         {/* Field */}
         <div
           ref={fieldRef}
@@ -1150,10 +1201,10 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         >
           {/* subtle scan lines */}
           <div style={{ position:"absolute", inset:0, backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 2px,#ffffff06 2px,#ffffff06 3px)", pointerEvents:"none" }} />
- 
+
           {/* catch-zone line */}
           <div style={{ position:"absolute", bottom:66, left:0, right:0, height:1, background:`${theme.accent}28` }} />
- 
+
           {/* entities */}
           {renderEntities.map((e) => (
             <div key={e.id} style={{
@@ -1173,7 +1224,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
               {e.emoji}
             </div>
           ))}
- 
+
           {/* player */}
           <div style={{
             position:"absolute", bottom:12,
@@ -1185,7 +1236,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
           }}>
             🧺
           </div>
- 
+
           {/* flash */}
           {flash && (
             <div style={{
@@ -1197,7 +1248,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
             </div>
           )}
         </div>
- 
+
         <div style={{ textAlign:"center", fontSize:11, color:"#556", marginTop:8 }}>
           Drag to move 🧺 &nbsp;·&nbsp; Arrow keys on desktop
         </div>
@@ -1205,7 +1256,7 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     </Overlay>
   );
 }
- 
+
 function Overlay({ children, bg }) {
   return (
     <div
@@ -1225,7 +1276,7 @@ function Overlay({ children, bg }) {
     </div>
   );
 }
- 
+
 const arcadeBtn = (accent) => ({
   background: accent,
   color: "#0a0f1a",
@@ -1237,12 +1288,12 @@ const arcadeBtn = (accent) => ({
   cursor: "pointer",
   letterSpacing: 0.5,
 });
- 
+
 // ─── COMPLIANCE BOSS FIGHT ───────────────────────────────────────────────────
 // Bullet-hell / dodge variant. Red-tape blobs rain down in waves.
 // Catch the CORRECT documents (matching glow), dodge the rest.
 // Three waves. Survive all three to pass the review.
- 
+
 const BOSS_DOCS = [
   { emoji: "📋", label: "Activity Log",      good: true  },
   { emoji: "🧾", label: "Pay Stub",          good: true  },
@@ -1255,18 +1306,18 @@ const BOSS_DOCS = [
   { emoji: "💣", label: "Sanction Notice",    good: false },
   { emoji: "🔴", label: "Fraud Flag",         good: false },
 ];
- 
+
 const WAVE_CONFIG = [
   { label: "Wave 1 — Initial Review",    speed: 130, spawnRate: 0.9, target: 8,  duration: 25 },
   { label: "Wave 2 — Secondary Audit",   speed: 160, spawnRate: 0.75, target: 10, duration: 25 },
   { label: "Wave 3 — Final Disposition", speed: 200, spawnRate: 0.6,  target: 12, duration: 30 },
 ];
- 
+
 function ComplianceBoss({ mode, onFinish }) {
   const FIELD_W = 360;
   const FIELD_H = 480;
   const PLAYER_W = 52;
- 
+
   const [waveIdx, setWaveIdx]     = useState(0);
   const [status, setStatus]       = useState("intro");
   const [renderPlayerX, setRenderPlayerX] = useState(FIELD_W/2-PLAYER_W/2);
@@ -1280,7 +1331,7 @@ function ComplianceBoss({ mode, onFinish }) {
   const [waveResults, setWaveResults] = useState([]);
   const [bossHealth, setBossHealth]   = useState(100);
   const [shakeField, setShakeField]   = useState(false);
- 
+
   // refs
   const playerXRef  = useRef(FIELD_W/2-PLAYER_W/2);
   const entitiesRef = useRef([]);
@@ -1296,19 +1347,19 @@ function ComplianceBoss({ mode, onFinish }) {
   const moveDir     = useRef(0);
   const lastTimeRef = useRef(0);
   const spawnTimerRef = useRef(0);
- 
+
   useEffect(() => { statusRef.current = status; }, [status]);
   useEffect(() => { waveIdxRef.current = waveIdx; }, [waveIdx]);
- 
+
   const wave = WAVE_CONFIG[waveIdx];
- 
+
   const keyboard = useEffect(() => {
     const dn = (e) => { if(e.key==="ArrowLeft") moveDir.current=-1; if(e.key==="ArrowRight") moveDir.current=1; };
     const up = (e) => { if((e.key==="ArrowLeft"&&moveDir.current===-1)||(e.key==="ArrowRight"&&moveDir.current===1)) moveDir.current=0; };
     window.addEventListener("keydown",dn); window.addEventListener("keyup",up);
     return () => { window.removeEventListener("keydown",dn); window.removeEventListener("keyup",up); };
   }, []);
- 
+
   const handlePointer = useCallback((clientX) => {
     if (!fieldRef.current) return;
     const rect = fieldRef.current.getBoundingClientRect();
@@ -1316,25 +1367,25 @@ function ComplianceBoss({ mode, onFinish }) {
     playerXRef.current = nx;
     setRenderPlayerX(nx);
   }, []);
- 
+
   const doShake = useCallback(() => { setShakeField(true); setTimeout(()=>setShakeField(false),400); }, []);
   const doFlash = useCallback((text,color) => { setFlash({text,color}); setTimeout(()=>setFlash(null),700); }, []);
- 
+
   const startWaveLoop = useCallback(() => {
     lastTimeRef.current = performance.now();
     spawnTimerRef.current = 0;
- 
+
     const tick = (now) => {
       if (statusRef.current !== "playing") return;
       const dt = Math.min((now - lastTimeRef.current)/1000, 0.05);
       lastTimeRef.current = now;
- 
+
       if (moveDir.current !== 0) {
         const nx = Math.max(0, Math.min(FIELD_W-PLAYER_W, playerXRef.current + moveDir.current*300*dt));
         playerXRef.current = nx;
         setRenderPlayerX(nx);
       }
- 
+
       timeRef.current -= dt;
       if (timeRef.current <= 0) {
         cancelAnimationFrame(rafRef.current);
@@ -1346,7 +1397,7 @@ function ComplianceBoss({ mode, onFinish }) {
         return;
       }
       setTimeLeft(Math.ceil(timeRef.current));
- 
+
       // spawn
       const wv = WAVE_CONFIG[waveIdxRef.current];
       const badRate = mode.id==="sanction"?0.55:mode.id==="crisis"?0.50:0.42;
@@ -1363,13 +1414,13 @@ function ComplianceBoss({ mode, onFinish }) {
           wobble:(Math.random()-0.5)*40, wt:0,
         }];
       }
- 
+
       // physics + collision
       const px = playerXRef.current;
       let newCaught = caughtRef.current, newHits = hitsRef.current;
       let newCombo = comboRef.current, newTotalGood = totalGoodRef.current;
       let flashData = null, shake = false;
- 
+
       const next = [];
       for (const e of entitiesRef.current) {
         const wt = (e.wt||0) + dt;
@@ -1394,25 +1445,25 @@ function ComplianceBoss({ mode, onFinish }) {
         next.push({...e, y:ny, wt});
       }
       entitiesRef.current = next;
- 
+
       if (newCaught !== caughtRef.current) { caughtRef.current=newCaught; setCaught(newCaught); }
       if (newHits !== hitsRef.current)     { hitsRef.current=newHits; setHits(newHits); }
       if (newCombo !== comboRef.current)   { comboRef.current=newCombo; setCombo(newCombo); }
       if (newTotalGood !== totalGoodRef.current) { totalGoodRef.current=newTotalGood; setTotalGood(newTotalGood); }
       if (flashData) doFlash(flashData.text, flashData.color);
       if (shake) doShake();
- 
+
       setRenderEntities([...entitiesRef.current]);
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
   }, [mode.id, doFlash, doShake]);
- 
+
   useEffect(() => {
     if (status === "playing") startWaveLoop();
     return () => cancelAnimationFrame(rafRef.current);
   }, [status, startWaveLoop]);
- 
+
   const nextWave = () => {
     const next = waveIdx+1;
     if (next >= WAVE_CONFIG.length) { setStatus("passed"); return; }
@@ -1426,20 +1477,20 @@ function ComplianceBoss({ mode, onFinish }) {
     setTimeLeft(WAVE_CONFIG[next].duration);
     setStatus("playing");
   };
- 
+
   const complianceGain = status==="passed"
     ? Math.min(40, 20+Math.floor(totalGood/3))
     : -Math.min(30, 10+waveResults.filter(w=>!w.passed).length*8);
- 
+
   const warnColor = hits>=3?"#f04a4a":hits>=2?"#f0a500":"#4aaf70";
- 
+
   if (status === "intro") return (
     <Overlay bg="#0a0314">
       <div style={{ textAlign: "center", maxWidth: 380 }}>
         <div style={{ fontSize: 14, letterSpacing: 4, color: "#f04a4a", textTransform: "uppercase", marginBottom: 8 }}>⚠ BOSS FIGHT</div>
         <div style={{ fontSize: 30, fontWeight: 900, color: "#fff", marginBottom: 4 }}>COMPLIANCE REVIEW</div>
         <div style={{ fontSize: 13, color: "#9a8ab8", marginBottom: 20, letterSpacing: 1 }}>Office of Family Support · Case Audit</div>
- 
+
         <div style={{ background: "#00000055", borderRadius: 12, padding: "18px 20px", marginBottom: 20, textAlign: "left", fontSize: 13, color: "#c8c0d8", lineHeight: 1.8 }}>
           <div>📋 <strong style={{ color: "#f0c050" }}>THREE WAVES</strong> of documents are incoming.</div>
           <div>✅ Catch <strong style={{ color: "#4aaf70" }}>VALID</strong> documents — activity logs, pay stubs, verifications.</div>
@@ -1449,7 +1500,7 @@ function ComplianceBoss({ mode, onFinish }) {
             Fail a wave and your compliance takes a hit.
           </div>
         </div>
- 
+
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 20 }}>
           {WAVE_CONFIG.map((w, i) => (
             <div key={i} style={{ background: "#ffffff11", borderRadius: 8, padding: "8px 14px", fontSize: 12, color: "#9a8ab8" }}>
@@ -1459,14 +1510,14 @@ function ComplianceBoss({ mode, onFinish }) {
             </div>
           ))}
         </div>
- 
+
         <button onClick={() => setStatus("playing")} style={{ ...arcadeBtn("#f04a4a"), background: "linear-gradient(90deg,#c01020,#f04a4a)", boxShadow: "0 4px 20px #f04a4a44" }}>
           Begin Audit →
         </button>
       </div>
     </Overlay>
   );
- 
+
   if (status === "waveDone") return (
     <Overlay bg="#0a0314">
       <div style={{ textAlign: "center", maxWidth: 340 }}>
@@ -1499,7 +1550,7 @@ function ComplianceBoss({ mode, onFinish }) {
       </div>
     </Overlay>
   );
- 
+
   if (status === "failed") return (
     <Overlay bg="#1a0004">
       <div style={{ textAlign: "center", maxWidth: 360 }}>
@@ -1525,7 +1576,7 @@ function ComplianceBoss({ mode, onFinish }) {
       </div>
     </Overlay>
   );
- 
+
   if (status === "passed") return (
     <Overlay bg="#001a0a">
       <div style={{ textAlign: "center", maxWidth: 380 }}>
@@ -1552,7 +1603,7 @@ function ComplianceBoss({ mode, onFinish }) {
       </div>
     </Overlay>
   );
- 
+
   // ── PLAYING ──
   return (
     <Overlay bg="#0a0314">
@@ -1567,7 +1618,7 @@ function ComplianceBoss({ mode, onFinish }) {
             <div style={{ width: `${bossHealth}%`, height: "100%", background: "linear-gradient(90deg,#c01020,#f04a4a)", transition: "width 0.2s", borderRadius: 4 }} />
           </div>
         </div>
- 
+
         {/* HUD */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div>
@@ -1580,7 +1631,7 @@ function ComplianceBoss({ mode, onFinish }) {
             <div style={{ fontSize: 20, fontWeight: 800, color: timeLeft <= 8 ? "#f04a4a" : "#fff" }}>{timeLeft}s</div>
           </div>
         </div>
- 
+
         {/* Catch / Hits progress */}
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <div style={{ flex: 1 }}>
@@ -1596,7 +1647,7 @@ function ComplianceBoss({ mode, onFinish }) {
             </div>
           </div>
         </div>
- 
+
         {/* Play field */}
         <div
           ref={fieldRef}
@@ -1618,10 +1669,10 @@ function ComplianceBoss({ mode, onFinish }) {
         >
           {/* Scan lines effect */}
           <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(0deg, transparent, transparent 3px, #ffffff04 3px, #ffffff04 4px)", pointerEvents: "none" }} />
- 
+
           {/* catch zone */}
           <div style={{ position: "absolute", bottom: 68, left: 0, right: 0, height: 1, background: "#f04a4a22" }} />
- 
+
           {/* entities */}
           {renderEntities.map((e) => {
             const wx = e.x + Math.sin((e.wt || 0) * 2.5) * (e.wobble || 0) * 0.3;
@@ -1644,7 +1695,7 @@ function ComplianceBoss({ mode, onFinish }) {
               </div>
             );
           })}
- 
+
           {/* player — briefcase */}
           <div
             style={{
@@ -1661,30 +1712,30 @@ function ComplianceBoss({ mode, onFinish }) {
           >
             💼
           </div>
- 
+
           {/* flash */}
           {flash && (
             <div style={{ position: "absolute", top: "40%", left: 0, right: 0, textAlign: "center", fontSize: 18, fontWeight: 800, color: flash.color, textShadow: "0 2px 10px #000", pointerEvents: "none" }}>
               {flash.text}
             </div>
           )}
- 
+
           {/* wave label watermark */}
           <div style={{ position: "absolute", top: 10, left: 0, right: 0, textAlign: "center", fontSize: 10, color: "#ffffff11", letterSpacing: 3, textTransform: "uppercase" }}>
             {wave.label}
           </div>
         </div>
- 
+
         <div style={{ textAlign: "center", fontSize: 11, color: "#6a5a7a", marginTop: 8 }}>
           Drag to move your briefcase 💼 &nbsp;·&nbsp; Arrow keys on desktop
         </div>
- 
+
         <style>{`@keyframes shake { 0%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} 100%{transform:translateX(0)} }`}</style>
       </div>
     </Overlay>
   );
 }
- 
+
 function GamePlay({ participant, fsa, onGameOver }) {
   const totalWeeks = 12;
   const [week, setWeek] = useState(1);
@@ -1703,9 +1754,9 @@ function GamePlay({ participant, fsa, onGameOver }) {
   const [bossActive, setBossActive] = useState(false);
   const [bossTriggered, setBossTriggered] = useState(false); // only once per week-6+
   const [sanctionWarning, setSanctionWarning] = useState(participant.mode.id === "sanction");
- 
+
   const required = participant.mode.hoursRequired;
- 
+
   const getRandomEvent = () => {
     const pool =
       participant.mode.id === "incapacity"
@@ -1713,22 +1764,22 @@ function GamePlay({ participant, fsa, onGameOver }) {
         : RANDOM_EVENTS;
     return pool[Math.floor(Math.random() * pool.length)];
   };
- 
+
   const submitWeek = () => {
     const ev = getRandomEvent();
     setEvent(ev);
- 
+
     const adjustedHours = Math.max(0, weeklyHours + questBonusHours + (ev.hoursLost || 0));
     const newMorale = Math.max(0, Math.min(100, morale - (ev.moraleLoss || 0)));
     const metHours = adjustedHours >= required;
- 
+
     const newCompliance = Math.max(
       0,
       Math.min(100, compliance + (metHours ? 5 : -15))
     );
- 
+
     const newHours = hours + adjustedHours;
- 
+
     // Goal progress
     const selectedGoalIds = Object.keys(activities).filter((k) => activities[k]);
     const updatedGoals = goals.map((g) => {
@@ -1739,11 +1790,11 @@ function GamePlay({ participant, fsa, onGameOver }) {
       }
       return g;
     });
- 
+
     const earnedPoints = updatedGoals
       .filter((g) => g.completed && !goals.find((og) => og.id === g.id)?.completed)
       .reduce((sum, g) => sum + g.points, 0);
- 
+
     setTotalPoints((p) => p + earnedPoints);
     setHours(newHours);
     setMorale(newMorale);
@@ -1755,7 +1806,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
     ]);
     setPhase("event");
   };
- 
+
   const advanceWeek = () => {
     if (week >= totalWeeks) {
       onGameOver({ goals, compliance, morale, totalPoints, hours, week });
@@ -1779,10 +1830,10 @@ function GamePlay({ participant, fsa, onGameOver }) {
       setTimeout(() => setBossActive(true), 400); // slight delay for drama
     }
   };
- 
+
   const toggleActivity = (id) =>
     setActivities((prev) => ({ ...prev, [id]: !prev[id] }));
- 
+
   // Called when an arcade quest ends. Applies progress + bonus hours to the goal.
   const finishQuest = (goalId, { progressGain, hoursWorked, cleared }) => {
     setGoals((prev) =>
@@ -1797,7 +1848,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
     if (cleared) setMorale((m) => Math.min(100, m + 5));
     setActiveQuest(null);
   };
- 
+
   const finishBoss = ({ passed, complianceGain }) => {
     setCompliance((c) => Math.max(0, Math.min(100, c + complianceGain)));
     setMorale((m) => Math.min(100, m + (passed ? 10 : -10)));
@@ -1807,16 +1858,16 @@ function GamePlay({ participant, fsa, onGameOver }) {
       ...prev,
     ]);
   };
- 
+
   // Trigger boss at week 6 (or week 4 in sanction) if not already done
   const shouldTriggerBoss = (currentWeek) =>
     !bossTriggered && (
       currentWeek === (participant.mode.id === "sanction" ? 4 : 6) ||
       (compliance < 40 && !bossTriggered)
     );
- 
+
   const completedGoals = goals.filter((g) => g.completed).length;
- 
+
   // Active boss fight takes over the screen
   if (bossActive) {
     return (
@@ -1826,7 +1877,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
       />
     );
   }
- 
+
   // Active arcade quest takes over the screen
   if (activeQuest) {
     return (
@@ -1837,7 +1888,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
       />
     );
   }
- 
+
   return (
     <div
       style={{
@@ -1876,7 +1927,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             <Badge text={`${completedGoals}/${goals.length} goals`} color="#4aaf70" />
           </div>
         </div>
- 
+
         {/* Stats */}
         <div
           style={{
@@ -1897,7 +1948,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             </div>
           ))}
         </div>
- 
+
         {/* Sanction warning */}
         {sanctionWarning && (
           <div
@@ -1915,7 +1966,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             {required} hrs/wk for 4 consecutive weeks to cure. Every missed week deepens the cut.
           </div>
         )}
- 
+
         {/* Event display */}
         {phase === "event" && event && (
           <div
@@ -1949,7 +2000,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             </button>
           </div>
         )}
- 
+
         {/* Weekly work phase */}
         {phase === "weekly" && (
           <>
@@ -1967,7 +2018,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
               <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 10 }}>
                 Required: <strong style={{ color: "#e8eaf0" }}>{required} hrs</strong> this week
               </div>
- 
+
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                 <button
                   onClick={() => setWeeklyHours((h) => Math.max(0, h - 4))}
@@ -1991,7 +2042,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                   Tap to adjust<br />in 4-hr blocks
                 </div>
               </div>
- 
+
               <ProgressBar
                 value={weeklyHours}
                 max={required}
@@ -1999,7 +2050,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 label="Weekly Hour Target"
               />
             </div>
- 
+
             {/* Goal quests */}
             <div style={{ background: "#111827", borderRadius: 12, padding: "16px 18px", marginBottom: 14 }}>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4, color: "#f0a500" }}>
@@ -2055,7 +2106,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 </div>
               ))}
             </div>
- 
+
             {/* Compliance Review incoming banner */}
             {!bossTriggered && (week === (participant.mode.id === "sanction" ? 3 : 5)) && (
               <div style={{
@@ -2075,7 +2126,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 </div>
               </div>
             )}
- 
+
             {/* Manual boss trigger — available any time compliance drops below 40 */}
             {!bossTriggered && compliance < 40 && (
               <div style={{
@@ -2092,7 +2143,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 </button>
               </div>
             )}
- 
+
             {/* Coach message */}
             <div
               style={{
@@ -2120,7 +2171,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 </div>
               </div>
             </div>
- 
+
             <button
               onClick={submitWeek}
               style={{
@@ -2139,7 +2190,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             </button>
           </>
         )}
- 
+
         {/* Activity Log */}
         {log.length > 0 && (
           <div style={{ marginTop: 18 }}>
@@ -2166,7 +2217,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
     </div>
   );
 }
- 
+
 const btnStyle = {
   border: "1px solid #2a3a4a",
   borderRadius: 6,
@@ -2176,115 +2227,287 @@ const btnStyle = {
   alignItems: "center",
   justifyContent: "center",
 };
- 
-function GameOver({ result, onRestart }) {
+
+function GameOver({ result, onRestart, onLeaderboard }) {
   const success = result.compliance > 50 && result.goals.filter((g) => g.completed).length >= 1;
   const completedGoals = result.goals.filter((g) => g.completed);
- 
+  const [playerName, setPlayerName] = useState("");
+  const [submitState, setSubmitState] = useState("idle"); // idle|submitting|done|error
+  const [rank, setRank] = useState(null);
+
+  const handleSubmit = async () => {
+    if (!playerName.trim()) return;
+    setSubmitState("submitting");
+    const entry = {
+      name: playerName.trim(),
+      points: result.totalPoints,
+      mode: result.participant?.mode?.label || "Unknown",
+      goals: completedGoals.length,
+      weeks: result.week,
+      hours: result.hours,
+      compliance: result.compliance,
+      success,
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    };
+    const ok = await postScore(entry);
+    if (ok) {
+      // Figure out rank
+      const scores = await fetchScores();
+      const pos = scores.findIndex(s => s.name === entry.name && s.points === entry.points && s.date === entry.date);
+      setRank(pos + 1);
+      setSubmitState("done");
+    } else {
+      setSubmitState(LEADERBOARD_CONFIGURED ? "error" : "unconfigured");
+    }
+  };
+
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background: "#0a0f1a",
-        fontFamily: "'Segoe UI', system-ui, sans-serif",
-        color: "#e8eaf0",
-        padding: 24,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div style={{ maxWidth: 480, textAlign: "center" }}>
-        <div style={{ fontSize: 64, marginBottom: 12 }}>{success ? "🏆" : "📋"}</div>
-        <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 8 }}>
-          {result.reason === "terminated"
-            ? "Case Terminated"
-            : success
-            ? "Case Closed — Self-Sufficient!"
-            : "Program Ended"}
+    <div style={{ minHeight:"100vh", background:"#0a0f1a", fontFamily:"'Segoe UI',system-ui,sans-serif", color:"#e8eaf0", padding:24, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ maxWidth:480, width:"100%", textAlign:"center" }}>
+        <div style={{ fontSize:64, marginBottom:12 }}>{success ? "🏆" : "📋"}</div>
+        <div style={{ fontSize:28, fontWeight:800, marginBottom:8 }}>
+          {result.reason==="terminated" ? "Case Terminated" : success ? "Case Closed — Self-Sufficient!" : "Program Ended"}
         </div>
- 
-        <div
-          style={{
-            background: "#111827",
-            borderRadius: 12,
-            padding: "20px 24px",
-            margin: "20px 0",
-            textAlign: "left",
-          }}
-        >
-          <div style={{ fontSize: 13, color: "#7a8a9a", marginBottom: 14 }}>CASE SUMMARY</div>
+
+        {/* Case summary */}
+        <div style={{ background:"#111827", borderRadius:12, padding:"20px 24px", margin:"20px 0", textAlign:"left" }}>
+          <div style={{ fontSize:13, color:"#7a8a9a", marginBottom:14 }}>CASE SUMMARY</div>
           {[
-            { label: "Total Points", val: result.totalPoints },
-            { label: "Weeks Completed", val: `${result.week} / 12` },
-            { label: "Total Hours Logged", val: result.hours },
-            { label: "Final Compliance", val: `${result.compliance}%` },
-            { label: "Goals Achieved", val: `${completedGoals.length} / ${result.goals.length}` },
+            { label:"Total Points",      val: result.totalPoints },
+            { label:"Weeks Completed",   val: `${result.week} / 12` },
+            { label:"Total Hours Logged",val: result.hours },
+            { label:"Final Compliance",  val: `${result.compliance}%` },
+            { label:"Goals Achieved",    val: `${completedGoals.length} / ${result.goals.length}` },
           ].map(({ label, val }) => (
-            <div
-              key={label}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                borderBottom: "1px solid #1a2535",
-                padding: "8px 0",
-                fontSize: 14,
-              }}
-            >
-              <span style={{ color: "#7a8a9a" }}>{label}</span>
-              <span style={{ fontWeight: 700, color: "#f0a500" }}>{val}</span>
+            <div key={label} style={{ display:"flex", justifyContent:"space-between", borderBottom:"1px solid #1a2535", padding:"8px 0", fontSize:14 }}>
+              <span style={{ color:"#7a8a9a" }}>{label}</span>
+              <span style={{ fontWeight:700, color:"#f0a500" }}>{val}</span>
             </div>
           ))}
           {completedGoals.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 11, color: "#556", marginBottom: 8 }}>GOALS ACHIEVED</div>
+            <div style={{ marginTop:14 }}>
+              <div style={{ fontSize:11, color:"#556", marginBottom:8 }}>GOALS ACHIEVED</div>
               {completedGoals.map((g) => (
-                <div key={g.id} style={{ fontSize: 13, color: "#4aaf70", marginBottom: 4 }}>
-                  ✅ {g.label}
-                </div>
+                <div key={g.id} style={{ fontSize:13, color:"#4aaf70", marginBottom:4 }}>✅ {g.label}</div>
               ))}
             </div>
           )}
         </div>
- 
-        <div style={{ fontSize: 13, color: "#7a8a9a", marginBottom: 24, lineHeight: 1.6 }}>
+
+        {/* Score submission */}
+        <div style={{ background:"#111827", borderRadius:12, padding:"18px 20px", marginBottom:20, textAlign:"left" }}>
+          <div style={{ fontSize:13, color:"#f0a500", fontWeight:700, marginBottom:4 }}>🏅 Hall of Fame</div>
+          <div style={{ fontSize:12, color:"#7a8a9a", marginBottom:14 }}>Submit your score to the all-time leaderboard.</div>
+
+          {submitState === "idle" && (
+            <div style={{ display:"flex", gap:8 }}>
+              <input
+                type="text"
+                value={playerName}
+                onChange={e => setPlayerName(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSubmit()}
+                placeholder="Enter your name..."
+                maxLength={24}
+                style={{ flex:1, background:"#0d1117", border:"1px solid #2a3a4a", borderRadius:7, padding:"9px 12px", color:"#e8eaf0", fontSize:14, outline:"none" }}
+              />
+              <button
+                onClick={handleSubmit}
+                disabled={!playerName.trim()}
+                style={{ background: playerName.trim() ? "linear-gradient(90deg,#f0a500,#d4900a)" : "#2a3a4a", color: playerName.trim() ? "#0a0f1a" : "#556", border:"none", borderRadius:7, padding:"9px 18px", fontWeight:700, fontSize:13, cursor: playerName.trim() ? "pointer" : "not-allowed" }}
+              >
+                Submit
+              </button>
+            </div>
+          )}
+
+          {submitState === "submitting" && (
+            <div style={{ color:"#f0a500", fontSize:13 }}>⏳ Submitting score...</div>
+          )}
+
+          {submitState === "done" && (
+            <div style={{ color:"#4aaf70", fontSize:14, fontWeight:700 }}>
+              ✅ Score submitted!{rank && ` You ranked #${rank} all-time.`}
+            </div>
+          )}
+
+          {submitState === "error" && (
+            <div style={{ color:"#f04a4a", fontSize:12 }}>⚠️ Submission failed — check your internet connection.</div>
+          )}
+
+          {submitState === "unconfigured" && (
+            <div style={{ color:"#f0a500", fontSize:12 }}>
+              ⚙️ Leaderboard not yet configured. See README for JSONBin setup.
+            </div>
+          )}
+        </div>
+
+        <div style={{ fontSize:13, color:"#7a8a9a", marginBottom:20, lineHeight:1.6 }}>
           {success
             ? "You navigated Louisiana's STEP program, met your participation requirements, and achieved your FSA goals. Real participants do this every day — often with far fewer resources."
             : "This is the reality many STEP participants face. Real barriers, real consequences. The program continues whether life cooperates or not."}
         </div>
- 
+
+        <div style={{ display:"flex", gap:10, justifyContent:"center", flexWrap:"wrap" }}>
+          <button onClick={onLeaderboard} style={{ background:"#1a2535", color:"#f0a500", border:"1px solid #f0a50033", borderRadius:8, padding:"12px 24px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            🏆 Hall of Fame
+          </button>
+          <button
+            onClick={onRestart}
+            style={{ background:"linear-gradient(90deg,#f0a500,#d4900a)", color:"#0a0f1a", border:"none", borderRadius:8, padding:"12px 24px", fontSize:14, fontWeight:700, cursor:"pointer" }}
+          >
+            New Case →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADERBOARD SCREEN ───────────────────────────────────────────────────────
+
+function Leaderboard({ onBack }) {
+  const [scores, setScores]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(false);
+
+  useEffect(() => {
+    if (!LEADERBOARD_CONFIGURED) { setLoading(false); return; }
+    fetchScores()
+      .then(s => { setScores(s.slice(0, 20)); setLoading(false); })
+      .catch(() => { setError(true); setLoading(false); });
+  }, []);
+
+  const medals = ["🥇","🥈","🥉"];
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#0a0f1a", fontFamily:"'Segoe UI',system-ui,sans-serif", color:"#e8eaf0", padding:20 }}>
+      <div style={{ maxWidth:520, margin:"0 auto" }}>
+
+        {/* Header */}
+        <div style={{ textAlign:"center", marginBottom:24, paddingTop:12 }}>
+          <div style={{ fontSize:42, marginBottom:6 }}>🏆</div>
+          <div style={{ fontSize:11, letterSpacing:4, color:"#f0a500", textTransform:"uppercase", marginBottom:4 }}>All-Time</div>
+          <div style={{ fontSize:26, fontWeight:900 }}>Hall of Fame</div>
+          <div style={{ fontSize:12, color:"#556", marginTop:4 }}>Mr. Adrian's STEP Experience</div>
+        </div>
+
+        {/* Content */}
+        {loading && (
+          <div style={{ textAlign:"center", padding:40, color:"#4a6a8a" }}>
+            <div style={{ fontSize:28, marginBottom:8 }}>⏳</div>
+            Loading leaderboard...
+          </div>
+        )}
+
+        {!loading && !LEADERBOARD_CONFIGURED && (
+          <div style={{ background:"#111827", borderRadius:12, padding:"24px 20px", textAlign:"center" }}>
+            <div style={{ fontSize:28, marginBottom:10 }}>⚙️</div>
+            <div style={{ color:"#f0a500", fontWeight:700, marginBottom:8 }}>Leaderboard Not Yet Set Up</div>
+            <div style={{ fontSize:13, color:"#7a8a9a", lineHeight:1.7 }}>
+              To enable the Hall of Fame, create a free account at{" "}
+              <strong style={{color:"#e8eaf0"}}>jsonbin.io</strong>, create a bin with{" "}
+              <code style={{color:"#f0a500", fontSize:11}}>{"{ \"scores\": [] }"}</code>, then paste
+              your Bin ID and API key into the top of <strong style={{color:"#e8eaf0"}}>app.jsx</strong>.
+            </div>
+          </div>
+        )}
+
+        {!loading && LEADERBOARD_CONFIGURED && error && (
+          <div style={{ textAlign:"center", padding:40, color:"#f04a4a" }}>
+            ⚠️ Could not load scores — check your connection.
+          </div>
+        )}
+
+        {!loading && LEADERBOARD_CONFIGURED && !error && scores.length === 0 && (
+          <div style={{ textAlign:"center", padding:40, color:"#4a6a8a" }}>
+            <div style={{ fontSize:28, marginBottom:8 }}>📋</div>
+            No scores yet — be the first on the board!
+          </div>
+        )}
+
+        {!loading && scores.length > 0 && (
+          <div>
+            {/* Top 3 podium */}
+            <div style={{ display:"flex", justifyContent:"center", alignItems:"flex-end", gap:10, marginBottom:20 }}>
+              {[scores[1], scores[0], scores[2]].map((s, i) => {
+                if (!s) return <div key={i} style={{width:100}} />;
+                const pos = i===1 ? 0 : i===0 ? 1 : 2;
+                const heights = [90, 120, 70];
+                return (
+                  <div key={i} style={{ textAlign:"center", width:100 }}>
+                    <div style={{ fontSize:11, color:"#f0a500", fontWeight:700, marginBottom:4 }}>{s.name}</div>
+                    <div style={{ fontSize:13, color:"#e8eaf0", marginBottom:4 }}>{s.points} pts</div>
+                    <div style={{
+                      height: heights[pos],
+                      background: pos===0 ? "linear-gradient(180deg,#f0c030,#b8860b)" : pos===1 ? "linear-gradient(180deg,#c0c0c0,#808080)" : "linear-gradient(180deg,#cd7f32,#8b4513)",
+                      borderRadius:"6px 6px 0 0",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:24
+                    }}>
+                      {medals[pos]}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Full list */}
+            <div style={{ background:"#111827", borderRadius:12, overflow:"hidden" }}>
+              {scores.map((s, i) => (
+                <div key={i} style={{
+                  display:"flex", alignItems:"center", gap:12, padding:"12px 16px",
+                  borderBottom: i < scores.length-1 ? "1px solid #1a2535" : "none",
+                  background: i < 3 ? "#f0a50008" : "transparent",
+                }}>
+                  <div style={{ width:28, textAlign:"center", fontSize: i<3 ? 18 : 13, color: i<3 ? "auto" : "#4a6a8a", fontWeight:700 }}>
+                    {i < 3 ? medals[i] : `#${i+1}`}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:14, color:"#e8eaf0", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
+                    <div style={{ fontSize:11, color:"#556", marginTop:2 }}>{s.mode} · {s.goals} goals · {s.date}</div>
+                  </div>
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontWeight:800, fontSize:16, color:"#f0a500" }}>{s.points}</div>
+                    <div style={{ fontSize:10, color:"#556" }}>pts</div>
+                  </div>
+                  <div style={{ fontSize:16 }}>{s.success ? "✅" : "📋"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <button
-          onClick={onRestart}
-          style={{
-            background: "linear-gradient(90deg, #f0a500, #d4900a)",
-            color: "#0a0f1a",
-            border: "none",
-            borderRadius: 8,
-            padding: "13px 36px",
-            fontSize: 15,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
+          onClick={onBack}
+          style={{ display:"block", margin:"24px auto 0", background:"#1a2535", color:"#e8eaf0", border:"1px solid #2a3a4a", borderRadius:8, padding:"12px 32px", fontSize:14, fontWeight:700, cursor:"pointer" }}
         >
-          New Case →
+          ← Back
         </button>
       </div>
     </div>
   );
 }
- 
+
 // ─── APP ─────────────────────────────────────────────────────────────────────
- 
+
 function App() {
-  const [screen, setScreen] = useState("title");
-  const [mode, setMode] = useState(null);
+  const [screen, setScreen]           = useState("title");
+  const [mode, setMode]               = useState(null);
   const [participant, setParticipant] = useState(null);
-  const [fsa, setFsa] = useState(null);
-  const [result, setResult] = useState(null);
- 
+  const [fsa, setFsa]                 = useState(null);
+  const [result, setResult]           = useState(null);
+
   return (
     <>
-      {screen === "title" && <TitleScreen onStart={() => setScreen("mode")} />}
+      {screen === "title" && (
+        <TitleScreen
+          onStart={() => setScreen("mode")}
+          onLeaderboard={() => setScreen("leaderboard")}
+        />
+      )}
+      {screen === "leaderboard" && (
+        <Leaderboard onBack={() => setScreen("title")} />
+      )}
       {screen === "mode" && (
         <ModeSelect
           onSelect={(m) => {
@@ -2316,7 +2539,7 @@ function App() {
           participant={participant}
           fsa={fsa}
           onGameOver={(r) => {
-            setResult(r);
+            setResult({ ...r, participant });
             setScreen("gameover");
           }}
         />
@@ -2324,6 +2547,7 @@ function App() {
       {screen === "gameover" && (
         <GameOver
           result={result}
+          onLeaderboard={() => setScreen("leaderboard")}
           onRestart={() => {
             setMode(null);
             setParticipant(null);
@@ -2337,17 +2561,17 @@ function App() {
   );
 }
 </script>
- 
+
   <script>
     var bar = document.getElementById("lbar");
     var msg = document.getElementById("lmsg");
     function pct(p, t) { bar.style.width = p + "%"; if (t) msg.textContent = t; }
- 
+
     function hideLoader() {
       var l = document.getElementById("loader");
       if (l) { l.classList.add("hidden"); setTimeout(function(){ l.remove(); }, 600); }
     }
- 
+
     function mountApp() {
       pct(90, "Compiling...");
       try {
@@ -2366,26 +2590,23 @@ function App() {
         console.error("Mount error:", e);
       }
     }
- 
+
     function loadScript(url, onDone) {
       var s = document.createElement("script");
-      s.src = url;
-      s.crossOrigin = "anonymous";
+      s.src = url; s.crossOrigin = "anonymous";
       s.onload = onDone;
-      s.onerror = function() {
-        msg.textContent = "Failed to load: " + url.split("/").pop() + " — check internet";
-      };
+      s.onerror = function() { msg.textContent = "Failed to load: " + url.split("/").pop() + " - check internet"; };
       document.head.appendChild(s);
     }
- 
+
     function step3() { pct(70, "Loading compiler..."); loadScript("https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js", function() { setTimeout(mountApp, 20); }); }
     function step2() { pct(40, "Loading ReactDOM..."); loadScript("https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js", step3); }
     function step1() { pct(15, "Loading React..."); loadScript("https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js", step2); }
- 
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(function(){});
     }
- 
+
     window.addEventListener("load", step1);
   </script>
 </body>
