@@ -37,6 +37,23 @@
 
   <script id="src" type="text/plain">const { useState, useEffect, useRef, useCallback } = React;
 
+// ─── BENEFIT TABLES (Official Louisiana amounts) ─────────────────────────────
+// FITAP: household size = participant + children (source: ldh.la.gov/page/fitap)
+const FITAP_BY_SIZE = { 1:244, 2:376, 3:484, 4:568, 5:654, 6:732, 7:804, 8:882, 9:954 };
+
+// SNAP max allotment FFY2025-2026 (source: USDA/Louisiana, effective Oct 1 2025)
+const SNAP_BY_SIZE  = { 1:292, 2:536, 3:768, 4:975, 5:1158, 6:1390, 7:1536, 8:1756 };
+
+function getBenefits(participant) {
+  const kids = participant.children || 0;
+  const houseSize = Math.min(9, kids + 1);
+  const snapSize  = Math.min(8, kids + 1);
+  return {
+    fitap: FITAP_BY_SIZE[houseSize] || 954,
+    snap:  SNAP_BY_SIZE[snapSize]   || 1756,
+  };
+}
+
 // ─── LEADERBOARD CONFIG ──────────────────────────────────────────────────────
 // Replace these two values with your own from jsonbin.io (free account)
 // Instructions printed in README and on the title screen
@@ -301,6 +318,88 @@ const LIFE_INVASIONS = [
     weight: 4,
     complianceLoss: 20,
     addBarrier: "Criminal background",
+  },
+  // ── KID-SPECIFIC INVASIONS (filtered by child count in pickInvasion) ──
+  {
+    id: "ear_infection",
+    emoji: "🤒",
+    title: "Baby's Got an Ear Infection",
+    flavor: "Third one this year. Doctor, pharmacy, up all night. You missed two days of work and you're running on fumes.",
+    penalty: "Lose 6 hours. Morale hit. Sick-kid obstacle surge.",
+    hoursLost: 6, moraleLoss: 12,
+    obstacleEmoji: ["🤒","🏥","💊","😴","😢"],
+    obstacleCount: 5, modes: ["standard","standard30","crisis","sanction","incapacity"], weight: 9, kidsMin: 1,
+  },
+  {
+    id: "both_sick",
+    emoji: "🤧",
+    title: "Both Kids Sick on the Same Day",
+    flavor: "Of course it's Monday. Of course you have a job interview. Both running fever, daycare won't take them. You're not going anywhere.",
+    penalty: "Lose 10 hours. Big morale hit.",
+    hoursLost: 10, moraleLoss: 18,
+    obstacleEmoji: ["🤒","🤧","💊","😭","🏥"],
+    obstacleCount: 7, modes: ["standard","standard30","crisis","sanction"], weight: 7, kidsMin: 2,
+  },
+  {
+    id: "school_called_three",
+    emoji: "📞",
+    title: "School Called Three Separate Times This Month",
+    flavor: "Fighting, tardiness, missing homework. Each call meant leaving work early. Your supervisor is not happy. Nobody is happy.",
+    penalty: "Lose 12 hours. Compliance warning. Stress surge.",
+    hoursLost: 12, moraleLoss: 20,
+    obstacleEmoji: ["📞","😤","🏫","⚠️","💸"],
+    obstacleCount: 8, modes: ["standard","standard30","crisis","sanction"], weight: 5, kidsMin: 3,
+  },
+  {
+    id: "daycare_closed",
+    emoji: "🏫",
+    title: "Daycare Closed — No Backup Plan",
+    flavor: "Pipe burst. They texted at 6:45am. You found out at 7:00am. You're supposed to be at work at 7:30am.",
+    penalty: "Lose 8 hours. Childcare barrier re-flagged.",
+    hoursLost: 8, moraleLoss: 15,
+    obstacleEmoji: ["🏫","😱","🧸","📵","💸"],
+    obstacleCount: 6, modes: ["standard","standard30","crisis","sanction","incapacity"], weight: 8, kidsMin: 1,
+    addBarrier: "No childcare",
+  },
+  {
+    id: "child_support",
+    emoji: "⚖️",
+    title: "Child Support Hearing This Month",
+    flavor: "Took off work, found a ride to the courthouse, sat there four hours to be seen for twelve minutes. The order didn't even change.",
+    penalty: "Lose 8 hours. Morale tanks. Paperwork surge.",
+    hoursLost: 8, moraleLoss: 14,
+    obstacleEmoji: ["⚖️","📋","💸","😤","🚗"],
+    obstacleCount: 6, modes: ["standard","standard30","crisis","sanction"], weight: 6, kidsMin: 1,
+  },
+  {
+    id: "grandma_weekend",
+    emoji: "👵",
+    title: "Grandma Took the Kids for the Weekend!",
+    flavor: "You cleaned the house, got some sleep, and logged extra hours. This is what self-sufficiency feels like.",
+    penalty: "+12 bonus hours. Morale boost.",
+    hoursLost: -12, moraleLoss: -20,
+    obstacleEmoji: [], obstacleCount: 0,
+    modes: ["standard","standard30","crisis","sanction","incapacity"], weight: 6, kidsMin: 1, isGood: true,
+  },
+  {
+    id: "church_childcare",
+    emoji: "⛪",
+    title: "Church Offered Free Childcare This Month",
+    flavor: "Sister Williams runs the program Tuesdays and Thursdays. You picked up two extra shifts. The Lord provides.",
+    penalty: "+10 bonus hours. Community morale boost.",
+    hoursLost: -10, moraleLoss: -12,
+    obstacleEmoji: [], obstacleCount: 0,
+    modes: ["standard","standard30","crisis","sanction","incapacity"], weight: 5, kidsMin: 1, isGood: true,
+  },
+  {
+    id: "large_family",
+    emoji: "👨‍👩‍👧‍👦",
+    title: "Somebody's Always Into Something",
+    flavor: "Five kids. One bathroom. Three school schedules. One on punishment, one sick, one got an award, one needs shoes, and the baby figured out the fridge.",
+    penalty: "Lose 10 hours. But you've been doing this — morale holds.",
+    hoursLost: 10, moraleLoss: 5,
+    obstacleEmoji: ["👶","🧸","📞","🏫","🤒","💸","😤"],
+    obstacleCount: 9, modes: ["standard","standard30","crisis","sanction"], weight: 8, kidsMin: 5,
   },
 ];
 
@@ -673,10 +772,16 @@ function ProfileBuilder({ mode, onComplete }) {
         </div>
 
         <button
-          onClick={() =>
-            canProceed &&
-            onComplete({ name: name.trim(), age: parseInt(age), children: parseInt(children), barriers, mode })
-          }
+          onClick={() => {
+            if (!canProceed) return;
+            const kidCount = parseInt(children) || 0;
+            // auto-add childcare barrier if kids present and not already selected
+            let finalBarriers = [...barriers];
+            if (kidCount > 0 && !finalBarriers.includes("No childcare")) {
+              finalBarriers = [...finalBarriers, "No childcare"];
+            }
+            onComplete({ name: name.trim(), age: parseInt(age), children: kidCount, barriers: finalBarriers, mode });
+          }}
           style={{
             marginTop: 28,
             width: "100%",
@@ -960,19 +1065,27 @@ function ArcadeQuest({ goal, mode, onFinish }) {
 
   // ── check if an invasion should trigger ──
   const pickInvasion = useCallback(() => {
+    const kids = mode.children || 0;
+    const kidMultiplier = kids === 0 ? 0 : kids <= 2 ? 1 : kids <= 4 ? 2 : 3;
     const eligible = LIFE_INVASIONS.filter(inv =>
-      inv.modes.includes(mode.id) && !invasionFired.current.has(inv.id)
+      inv.modes.includes(mode.id) &&
+      !invasionFired.current.has(inv.id) &&
+      (!inv.kidsMin || kids >= inv.kidsMin)
     );
     if (!eligible.length) return null;
-    // weighted random
-    const totalW = eligible.reduce((s,i) => s + i.weight, 0);
+    const totalW = eligible.reduce((s, i) => {
+      // boost kid-specific invasions based on number of children
+      const w = i.kidsMin ? i.weight * (1 + kidMultiplier * 0.5) : i.weight;
+      return s + w;
+    }, 0);
     let r = Math.random() * totalW;
     for (const inv of eligible) {
-      r -= inv.weight;
+      const w = inv.kidsMin ? inv.weight * (1 + kidMultiplier * 0.5) : inv.weight;
+      r -= w;
       if (r <= 0) return inv;
     }
-    return eligible[eligible.length-1];
-  }, [mode.id]);
+    return eligible[eligible.length - 1];
+  }, [mode.id, mode.children]);
 
   // ── main physics loop ──
   const startLoop = useCallback(() => {
@@ -1753,12 +1866,24 @@ function GamePlay({ participant, fsa, onGameOver }) {
   const [phase, setPhase] = useState("monthly");
   const [monthlyHoursLogged, setMonthlyHoursLogged] = useState(0);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [stipendTotal, setStipendTotal] = useState(0);
+  const [lastStipend, setLastStipend] = useState(null);
+  const [consecutiveMisses, setConsecutiveMisses] = useState(participant.mode.id === "sanction" ? 1 : 0);
+  const [autoSanctioned, setAutoSanctioned] = useState(false);
   const [activities, setActivities] = useState({});
   const [activeQuest, setActiveQuest] = useState(null);
   const [questBonusHours, setQuestBonusHours] = useState(0);
   const [bossActive, setBossActive] = useState(false);
   const [bossTriggered, setBossTriggered] = useState(false);
   const [sanctionWarning, setSanctionWarning] = useState(participant.mode.id === "sanction");
+
+  // EBT accounts — loaded monthly, drained by obstacles
+  const monthlyBenefits = getBenefits(participant);
+  const [fitapBalance, setFitapBalance]   = useState(monthlyBenefits.fitap);
+  const [snapBalance, setSnapBalance]     = useState(monthlyBenefits.snap);
+  const [fitapLifetime, setFitapLifetime] = useState(monthlyBenefits.fitap);
+  const [snapLifetime, setSnapLifetime]   = useState(monthlyBenefits.snap);
+  const [ebtFlash, setEbtFlash]           = useState(null); // {fitap, snap} drain this event
 
   const required = participant.mode.monthlyHours;
 
@@ -1777,6 +1902,23 @@ function GamePlay({ participant, fsa, onGameOver }) {
     const adjustedHours = Math.max(0, monthlyHoursLogged + questBonusHours + (ev.hoursLost || 0));
     const newMorale = Math.max(0, Math.min(100, morale - (ev.moraleLoss || 0)));
     const metHours = adjustedHours >= required;
+
+    // Stipend: $200 if hours met, $0 if not
+    if (metHours) {
+      setStipendTotal((s) => s + 200);
+      setLastStipend("earned");
+      setConsecutiveMisses(0);
+    } else {
+      setLastStipend("lost");
+      const newMisses = consecutiveMisses + 1;
+      setConsecutiveMisses(newMisses);
+      // 2 consecutive months missed → auto-sanction
+      if (newMisses >= 2 && !autoSanctioned) {
+        setAutoSanctioned(true);
+        setCompliance((c) => Math.max(0, c - 35));
+        setSanctionWarning(true);
+      }
+    }
 
     const newCompliance = Math.max(
       0,
@@ -1799,13 +1941,24 @@ function GamePlay({ participant, fsa, onGameOver }) {
       .filter((g) => g.completed && !goals.find((og) => og.id === g.id)?.completed)
       .reduce((sum, g) => sum + g.points, 0);
 
-    setTotalPoints((p) => p + earnedPoints);
+    // EBT drain: obstacles cost money from accounts
+    // hoursLost events map to financial hits — bigger events drain more
+    const hoursLost = ev.hoursLost || 0;
+    if (hoursLost > 0 && ev.type !== "good") {
+      // Each hour lost = ~$8 FITAP drain, ~$12 SNAP drain (scaled by severity)
+      const fitapDrain = Math.min(fitapBalance, Math.round(hoursLost * 7 + Math.random() * 20));
+      const snapDrain  = Math.min(snapBalance,  Math.round(hoursLost * 10 + Math.random() * 25));
+      setFitapBalance(b => Math.max(0, b - fitapDrain));
+      setSnapBalance(b  => Math.max(0, b - snapDrain));
+      setEbtFlash({ fitap: fitapDrain, snap: snapDrain });
+      setTimeout(() => setEbtFlash(null), 3000);
+    }
     setHours(newHours);
     setMorale(newMorale);
     setCompliance(newCompliance);
     setGoals(updatedGoals);
     setLog((prev) => [
-      `Month ${month}: ${adjustedHours} hrs logged. Compliance: ${newCompliance}%. ${ev.type === "good" ? "✅" : "⚠️"} ${ev.text.slice(2)}`,
+      `Month ${month}: ${adjustedHours} hrs logged. ${metHours ? "✅ $200 stipend earned!" : "❌ Stipend lost — hours not met."} Compliance: ${newCompliance}%.`,
       ...prev,
     ]);
     setPhase("event");
@@ -1813,11 +1966,11 @@ function GamePlay({ participant, fsa, onGameOver }) {
 
   const advanceMonth = () => {
     if (month >= totalMonths) {
-      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month });
+      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, stipendTotal, fitapLifetime, snapLifetime });
       return;
     }
     if (compliance <= 0) {
-      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, reason: "terminated" });
+      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, stipendTotal, fitapLifetime, snapLifetime, reason: "terminated" });
       return;
     }
     const nextMonth = month + 1;
@@ -1826,8 +1979,14 @@ function GamePlay({ participant, fsa, onGameOver }) {
     setQuestBonusHours(0);
     setActivities({});
     setEvent(null);
+    setLastStipend(null);
     setPhase("monthly");
     setSanctionWarning(false);
+    // Reload EBT accounts for new month
+    setFitapBalance(monthlyBenefits.fitap);
+    setSnapBalance(monthlyBenefits.snap);
+    setFitapLifetime(l => l + monthlyBenefits.fitap);
+    setSnapLifetime(l  => l + monthlyBenefits.snap);
     if (shouldTriggerBoss(nextMonth)) {
       setBossTriggered(true);
       setTimeout(() => setBossActive(true), 400);
@@ -1875,7 +2034,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
   if (bossActive) {
     return (
       <ComplianceBoss
-        mode={participant.mode}
+        mode={{ ...participant.mode, children: participant.children }}
         onFinish={finishBoss}
       />
     );
@@ -1886,7 +2045,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
     return (
       <ArcadeQuest
         goal={activeQuest}
-        mode={participant.mode}
+        mode={{ ...participant.mode, children: participant.children }}
         onFinish={(res) => finishQuest(activeQuest.id, res)}
       />
     );
@@ -1925,9 +2084,10 @@ function GamePlay({ participant, fsa, onGameOver }) {
               {participant.mode.label} · Month {month} of {totalMonths}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <Badge text={`${totalPoints} pts`} color="#f0a500" />
-            <Badge text={`${completedGoals}/${goals.length} goals`} color="#4aaf70" />
+            <Badge text={`$${stipendTotal} stipend`} color="#4aaf70" />
+            <Badge text={`${completedGoals}/${goals.length} goals`} color="#4a9af0" />
           </div>
         </div>
 
@@ -1935,18 +2095,105 @@ function GamePlay({ participant, fsa, onGameOver }) {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr 1fr",
-            gap: 10,
+            gridTemplateColumns: "1fr 1fr 1fr 1fr",
+            gap: 8,
             marginBottom: 16,
           }}
         >
           {[
             { label: "Compliance", val: compliance, max: 100, color: compliance > 60 ? "#4aaf70" : "#f04a4a" },
             { label: "Morale", val: morale, max: 100, color: morale > 40 ? "#4a9af0" : "#f0a500" },
-            { label: "Hours (total)", val: hours, max: required * totalMonths, color: "#f0a500" },
+            { label: "Hours Total", val: hours, max: required * totalMonths, color: "#f0a500" },
+            { label: "Stipend Earned", val: stipendTotal, max: 1200, color: "#4aaf70" },
           ].map(({ label, val, max, color }) => (
-            <div key={label} style={{ background: "#111827", borderRadius: 10, padding: "12px 14px" }}>
-              <div style={{ fontSize: 11, color: "#556", marginBottom: 6 }}>{label}</div>
+            <div key={label} style={{ background: "#111827", borderRadius: 10, padding: "10px 12px" }}>
+              <div style={{ fontSize: 10, color: "#556", marginBottom: 6 }}>{label}</div>
+              <ProgressBar value={val} max={max} color={color} />
+            </div>
+          ))}
+        </div>
+
+        {/* EBT Accounts Panel */}
+        <div style={{ background:"#111827", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+          <div style={{ fontSize:11, color:"#f0a500", letterSpacing:2, textTransform:"uppercase", marginBottom:10, fontWeight:700 }}>
+            💳 Louisiana Purchase Card (EBT)
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {/* FITAP Account */}
+            <div style={{ background:"#0d1117", borderRadius:8, padding:"10px 12px", border:"1px solid #1a3a5c" }}>
+              <div style={{ fontSize:10, color:"#4a9af0", letterSpacing:1, marginBottom:4 }}>FITAP CASH</div>
+              <div style={{ fontSize:22, fontWeight:800, color: fitapBalance < monthlyBenefits.fitap * 0.3 ? "#f04a4a" : "#4a9af0" }}>
+                ${fitapBalance}
+              </div>
+              <div style={{ fontSize:10, color:"#556", marginTop:2 }}>of ${monthlyBenefits.fitap}/mo</div>
+              <div style={{ background:"#1a2535", borderRadius:3, height:4, marginTop:6, overflow:"hidden" }}>
+                <div style={{ width:`${Math.max(0,(fitapBalance/monthlyBenefits.fitap)*100)}%`, height:"100%", background:"#4a9af0", transition:"width 0.4s" }} />
+              </div>
+              {ebtFlash?.fitap > 0 && (
+                <div style={{ fontSize:11, color:"#f04a4a", marginTop:4, fontWeight:700 }}>−${ebtFlash.fitap} obstacle hit!</div>
+              )}
+            </div>
+            {/* SNAP Account */}
+            <div style={{ background:"#0d1117", borderRadius:8, padding:"10px 12px", border:"1px solid #1a3a1c" }}>
+              <div style={{ fontSize:10, color:"#4aaf70", letterSpacing:1, marginBottom:4 }}>SNAP / FOOD</div>
+              <div style={{ fontSize:22, fontWeight:800, color: snapBalance < monthlyBenefits.snap * 0.3 ? "#f04a4a" : "#4aaf70" }}>
+                ${snapBalance}
+              </div>
+              <div style={{ fontSize:10, color:"#556", marginTop:2 }}>of ${monthlyBenefits.snap}/mo</div>
+              <div style={{ background:"#1a2535", borderRadius:3, height:4, marginTop:6, overflow:"hidden" }}>
+                <div style={{ width:`${Math.max(0,(snapBalance/monthlyBenefits.snap)*100)}%`, height:"100%", background:"#4aaf70", transition:"width 0.4s" }} />
+              </div>
+              {ebtFlash?.snap > 0 && (
+                <div style={{ fontSize:11, color:"#f04a4a", marginTop:4, fontWeight:700 }}>−${ebtFlash.snap} obstacle hit!</div>
+              )}
+            </div>
+          </div>
+          <div style={{ fontSize:10, color:"#3a5a3a", marginTop:8, textAlign:"center" }}>
+            Household size {Math.min(9, (participant.children||0)+1)} · Benefits based on official Louisiana LDH/USDA FFY2025-26 rates
+          </div>
+          {(fitapBalance === 0 || snapBalance === 0) && (
+            <div style={{ marginTop:8, fontSize:12, color:"#f04a4a", fontWeight:700, textAlign:"center" }}>
+              ⚠️ {fitapBalance === 0 ? "FITAP" : "SNAP"} balance depleted — visit your caseworker
+            </div>
+          )}
+        </div>
+
+        {/* Stipend notification */}
+        {lastStipend && (
+          <div style={{
+            background: lastStipend === "earned" ? "#0a2a14" : "#1a0004",
+            border: `1px solid ${lastStipend === "earned" ? "#4aaf7044" : "#f04a4a44"}`,
+            borderRadius: 10, padding: "12px 16px", marginBottom: 12,
+            display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <div style={{ fontSize: 24 }}>{lastStipend === "earned" ? "💵" : "💔"}</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: lastStipend === "earned" ? "#4aaf70" : "#f04a4a" }}>
+                {lastStipend === "earned" ? "$200 Transportation Stipend — EARNED!" : "Stipend LOST — Hours Not Met"}
+              </div>
+              <div style={{ fontSize: 12, color: "#7a8a9a", marginTop: 2 }}>
+                {lastStipend === "earned"
+                  ? `You hit your ${required}-hour target. $200 transportation stipend deposited. Total: $${stipendTotal}`
+                  : `You needed ${required} hrs to qualify for the $200 stipend. ${consecutiveMisses >= 2 ? "⚠️ 2 consecutive misses — AUTOMATIC SANCTION TRIGGERED!" : `Miss again next month and you face automatic sanction.`}`}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Auto-sanction alert */}
+        {autoSanctioned && consecutiveMisses >= 2 && (
+          <div style={{
+            background: "#1a0004", border: "1px solid #f04a4a88",
+            borderRadius: 10, padding: "12px 16px", marginBottom: 12,
+          }}>
+            <div style={{ fontSize: 13, color: "#f04a4a", fontWeight: 800, marginBottom: 4 }}>
+              🚨 AUTOMATIC SANCTION — 2 Consecutive Months Without Hours
+            </div>
+            <div style={{ fontSize: 12, color: "#9a6a6a" }}>
+              Per Louisiana Works STEP policy, failure to participate for 2 consecutive months results in an automatic sanction. Your compliance has been reduced significantly. You must complete the Compliance Review to restore standing.
+            </div>
+          </div>
+        )}
               <ProgressBar value={val} max={max} color={color} />
             </div>
           ))}
@@ -2242,6 +2489,7 @@ function GameOver({ result, onRestart, onLeaderboard }) {
       goals: completedGoals.length,
       weeks: result.week,
       hours: result.hours,
+      stipend: result.stipendTotal || 0,
       compliance: result.compliance,
       success,
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
@@ -2271,8 +2519,11 @@ function GameOver({ result, onRestart, onLeaderboard }) {
           <div style={{ fontSize:13, color:"#7a8a9a", marginBottom:14 }}>CASE SUMMARY</div>
           {[
             { label:"Total Points",      val: result.totalPoints },
-            { label:"Weeks Completed",   val: `${result.week} / 6 months` },
+            { label:"Months Completed",  val: `${result.week} / 6` },
             { label:"Total Hours Logged",val: result.hours },
+            { label:"Stipend Earned",    val: `$${result.stipendTotal || 0}` },
+            { label:"FITAP Received",    val: `$${result.fitapLifetime || 0}` },
+            { label:"SNAP Received",     val: `$${result.snapLifetime || 0}` },
             { label:"Final Compliance",  val: `${result.compliance}%` },
             { label:"Goals Achieved",    val: `${completedGoals.length} / ${result.goals.length}` },
           ].map(({ label, val }) => (
@@ -2461,7 +2712,7 @@ function Leaderboard({ onBack }) {
                   </div>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:14, color:"#e8eaf0", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
-                    <div style={{ fontSize:11, color:"#556", marginTop:2 }}>{s.mode} · {s.goals} goals · {s.date}</div>
+                    <div style={{ fontSize:11, color:"#556", marginTop:2 }}>{s.mode} · {s.goals} goals · ${s.stipend || 0} stipend · {s.date}</div>
                   </div>
                   <div style={{ textAlign:"right", flexShrink:0 }}>
                     <div style={{ fontWeight:800, fontSize:16, color:"#f0a500" }}>{s.points}</div>
