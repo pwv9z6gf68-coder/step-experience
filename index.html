@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0a0f1a" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="STEP Experience" />
@@ -1034,18 +1035,30 @@ function ArcadeQuest({ goal, mode, onFinish }) {
   // sync status ref
   useEffect(() => { statusRef.current = status; }, [status]);
 
+  // ── fire bullet — stored in ref so keyboard handler never has stale closure ──
+  const fireBulletRef = useRef(null);
+  const fireBullet = () => {
+    if (statusRef.current !== "playing") return;
+    if (ammoRef.current <= 0) return;
+    ammoRef.current -= 1;
+    setAmmo(ammoRef.current);
+    const bx = playerXRef.current + PLAYER_W / 2 - 5;
+    bulletsRef.current = [...bulletsRef.current, { id: Math.random(), x: bx, y: FIELD_H - 80 }];
+  };
+  fireBulletRef.current = fireBullet;
+
   // ── keyboard ──
   useEffect(() => {
     const dn = (e) => {
       if (e.key==="ArrowLeft") moveDir.current=-1;
       if (e.key==="ArrowRight") moveDir.current=1;
-      if (e.key===" " || e.key==="ArrowUp") { e.preventDefault(); fireBullet(); }
+      if (e.key===" " || e.key==="ArrowUp") { e.preventDefault(); fireBulletRef.current && fireBulletRef.current(); }
     };
     const up = (e) => { if ((e.key==="ArrowLeft"&&moveDir.current===-1)||(e.key==="ArrowRight"&&moveDir.current===1)) moveDir.current=0; };
     window.addEventListener("keydown", dn);
     window.addEventListener("keyup", up);
     return () => { window.removeEventListener("keydown", dn); window.removeEventListener("keyup", up); };
-  }, [fireBullet]);
+  }, []);
 
   // ── pointer / touch ──
   const handlePointer = useCallback((clientX) => {
@@ -1055,16 +1068,6 @@ function ArcadeQuest({ goal, mode, onFinish }) {
     const nx   = Math.max(0, Math.min(FIELD_W - PLAYER_W, rel - PLAYER_W / 2));
     playerXRef.current = nx;
     setRenderPlayerX(nx);
-  }, []);
-
-  // ── fire bullet on tap/click ──
-  const fireBullet = useCallback(() => {
-    if (statusRef.current !== "playing") return;
-    if (ammoRef.current <= 0) return;
-    ammoRef.current -= 1;
-    setAmmo(ammoRef.current);
-    const bx = playerXRef.current + PLAYER_W / 2 - 5;
-    bulletsRef.current = [...bulletsRef.current, { id: Math.random(), x: bx, y: FIELD_H - 80 }];
   }, []);
 
   // ── flash helper ──
@@ -1400,9 +1403,9 @@ function ArcadeQuest({ goal, mode, onFinish }) {
         <div
           ref={fieldRef}
           onMouseMove={(e) => handlePointer(e.clientX)}
-          onClick={fireBullet}
+          onClick={() => fireBulletRef.current && fireBulletRef.current()}
           onTouchMove={(e) => { e.preventDefault(); handlePointer(e.touches[0].clientX); }}
-          onTouchStart={(e) => { e.preventDefault(); handlePointer(e.touches[0].clientX); fireBullet(); }}
+          onTouchStart={(e) => { e.preventDefault(); handlePointer(e.touches[0].clientX); fireBulletRef.current && fireBulletRef.current(); }}
           style={{
             position:"relative", width:"100%", height:FIELD_H,
             background:`linear-gradient(180deg, ${theme.bg} 0%, #000814 100%)`,
@@ -2844,13 +2847,11 @@ function Leaderboard({ onBack }) {
 
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
-  componentDidCatch(error, info) { 
-    this.setState({ error: error.message + '\n' + (info && info.componentStack ? info.componentStack.slice(0,500) : '') }); 
-  }
+  componentDidCatch(e, i) { this.setState({ error: e.message + "\n" + (i&&i.componentStack||"").slice(0,600) }); }
   render() {
     if (this.state.error) return (
-      <div style={{ position:'fixed', inset:0, background:'#0a0f1a', color:'#f04a4a', padding:24, fontFamily:'monospace', fontSize:12, whiteSpace:'pre-wrap', zIndex:9999, overflow:'auto' }}>
-        {'🔴 GAME ERROR - SEND THIS TO MR. ADRIAN:\n\n' + this.state.error}
+      <div style={{position:"fixed",inset:0,background:"#0a0f1a",color:"#f04a4a",padding:24,fontFamily:"monospace",fontSize:12,whiteSpace:"pre-wrap",zIndex:9999,overflow:"auto"}}>
+        {"CRASH - SEND TO MR. ADRIAN:\n\n" + this.state.error}
       </div>
     );
     return this.props.children;
@@ -2930,51 +2931,34 @@ function App() {
 </script>
 
   <script>
-    var bar = document.getElementById("lbar");
-    var msg = document.getElementById("lmsg");
-    function pct(p, t) { bar.style.width = p + "%"; if (t) msg.textContent = t; }
-
-    function hideLoader() {
-      var l = document.getElementById("loader");
-      if (l) { l.classList.add("hidden"); setTimeout(function(){ l.remove(); }, 600); }
-    }
-
-    function mountApp() {
-      pct(90, "Compiling...");
-      try {
-        var jsxSrc = document.getElementById("src").textContent;
-        var compiled = Babel.transform(jsxSrc, { presets: ["react"] }).code;
-        pct(98, "Launching...");
-        var fn = new Function("React", "ReactDOM", compiled +
-          "\nvar _root = ReactDOM.createRoot(document.getElementById(\"root\"));" +
-          "\n_root.render(React.createElement(ErrorBoundary, null, React.createElement(App)));"
+    var bar=document.getElementById("lbar");
+    var msg=document.getElementById("lmsg");
+    function pct(p,t){bar.style.width=p+"%";if(t)msg.textContent=t;}
+    function hideLoader(){var l=document.getElementById("loader");if(l){l.classList.add("hidden");setTimeout(function(){l.remove();},600);}}
+    function mountApp(){
+      pct(90,"Compiling...");
+      try{
+        var jsxSrc=document.getElementById("src").textContent;
+        var compiled=Babel.transform(jsxSrc,{presets:["react"]}).code;
+        pct(98,"Launching...");
+        var fn=new Function("React","ReactDOM",compiled+
+          "\nvar _root=ReactDOM.createRoot(document.getElementById(\"root\"));"+
+          "\n_root.render(React.createElement(ErrorBoundary,null,React.createElement(App)));"
         );
-        fn(React, ReactDOM);
-        pct(100, "");
-        setTimeout(hideLoader, 400);
-      } catch(e) {
-        msg.textContent = "Error: " + e.message.slice(0, 80);
-        console.error("Mount error:", e);
+        fn(React,ReactDOM);
+        pct(100,"");
+        setTimeout(hideLoader,400);
+      }catch(e){
+        msg.textContent="Compile error: "+e.message.slice(0,120);
+        console.error("Mount error:",e);
       }
     }
-
-    function loadScript(url, onDone) {
-      var s = document.createElement("script");
-      s.src = url; s.crossOrigin = "anonymous";
-      s.onload = onDone;
-      s.onerror = function() { msg.textContent = "Failed to load: " + url.split("/").pop() + " - check internet"; };
-      document.head.appendChild(s);
-    }
-
-    function step3() { pct(70, "Loading compiler..."); loadScript("https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js", function() { setTimeout(mountApp, 20); }); }
-    function step2() { pct(40, "Loading ReactDOM..."); loadScript("https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js", step3); }
-    function step1() { pct(15, "Loading React..."); loadScript("https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js", step2); }
-
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").catch(function(){});
-    }
-
-    window.addEventListener("load", step1);
+    function loadScript(url,cb){var s=document.createElement("script");s.src=url;s.crossOrigin="anonymous";s.onload=cb;s.onerror=function(){msg.textContent="Failed: "+url.split("/").pop();};document.head.appendChild(s);}
+    function step3(){pct(70,"Loading compiler...");loadScript("https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js",function(){setTimeout(mountApp,20);});}
+    function step2(){pct(40,"Loading ReactDOM...");loadScript("https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js",step3);}
+    function step1(){pct(15,"Loading React...");loadScript("https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js",step2);}
+    if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}
+    window.addEventListener("load",step1);
   </script>
 </body>
 </html>
