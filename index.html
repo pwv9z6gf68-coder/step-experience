@@ -953,6 +953,40 @@ function FSABuilder({ participant, onComplete }) {
   );
 }
 
+// ─── SHARED ARCADE HELPERS ───────────────────────────────────────────────────
+
+function Overlay({ children, bg }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        background: bg || "#0a0f1a",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+        fontFamily: "'Segoe UI', system-ui, sans-serif",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const arcadeBtn = (accent) => ({
+  background: accent,
+  color: "#0a0f1a",
+  border: "none",
+  borderRadius: 8,
+  padding: "13px 36px",
+  fontSize: 15,
+  fontWeight: 800,
+  cursor: "pointer",
+  letterSpacing: 0.5,
+});
+
 // ─── ARCADE QUEST ────────────────────────────────────────────────────────────
 // Fully ref-based physics — no stale closures. Single setEntities per frame.
 // Life Invasions interrupt gameplay with narrative events + obstacle surges.
@@ -1469,38 +1503,6 @@ function ArcadeQuest({ goal, mode, onFinish }) {
   );
 }
 
-function Overlay({ children, bg }) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 50,
-        background: bg || "#0a0f1a",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        fontFamily: "'Segoe UI', system-ui, sans-serif",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-const arcadeBtn = (accent) => ({
-  background: accent,
-  color: "#0a0f1a",
-  border: "none",
-  borderRadius: 8,
-  padding: "13px 36px",
-  fontSize: 15,
-  fontWeight: 800,
-  cursor: "pointer",
-  letterSpacing: 0.5,
-});
-
 // ─── COMPLIANCE BOSS FIGHT ───────────────────────────────────────────────────
 // Bullet-hell / dodge variant. Red-tape blobs rain down in waves.
 // Catch the CORRECT documents (matching glow), dodge the rest.
@@ -1947,6 +1949,16 @@ function ComplianceBoss({ mode, onFinish }) {
     </Overlay>
   );
 }
+
+const btnStyle = {
+  border: "1px solid #2a3a4a",
+  borderRadius: 6,
+  color: "#e8eaf0",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
 
 function GamePlay({ participant, fsa, onGameOver }) {
   const totalMonths = 6;
@@ -2557,16 +2569,6 @@ function GamePlay({ participant, fsa, onGameOver }) {
   );
 }
 
-const btnStyle = {
-  border: "1px solid #2a3a4a",
-  borderRadius: 6,
-  color: "#e8eaf0",
-  cursor: "pointer",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-};
-
 function GameOver({ result, onRestart, onLeaderboard }) {
   const success = result.compliance > 50 && result.goals.filter((g) => g.completed).length >= 1;
   const completedGoals = result.goals.filter((g) => g.completed);
@@ -2839,6 +2841,22 @@ function Leaderboard({ onBack }) {
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  componentDidCatch(error, info) { 
+    this.setState({ error: error.message + '\n' + (info && info.componentStack ? info.componentStack.slice(0,500) : '') }); 
+  }
+  render() {
+    if (this.state.error) return (
+      <div style={{ position:'fixed', inset:0, background:'#0a0f1a', color:'#f04a4a', padding:24, fontFamily:'monospace', fontSize:12, whiteSpace:'pre-wrap', zIndex:9999, overflow:'auto' }}>
+        {'🔴 GAME ERROR - SEND THIS TO MR. ADRIAN:\n\n' + this.state.error}
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
 function App() {
   const [screen, setScreen]           = useState("title");
   const [mode, setMode]               = useState(null);
@@ -2929,7 +2947,7 @@ function App() {
         pct(98, "Launching...");
         var fn = new Function("React", "ReactDOM", compiled +
           "\nvar _root = ReactDOM.createRoot(document.getElementById(\"root\"));" +
-          "\n_root.render(React.createElement(App));"
+          "\n_root.render(React.createElement(ErrorBoundary, null, React.createElement(App)));"
         );
         fn(React, ReactDOM);
         pct(100, "");
