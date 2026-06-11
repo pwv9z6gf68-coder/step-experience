@@ -79,40 +79,45 @@ const MODES = [
     id: "standard",
     label: "Standard Track — 20 hrs/wk",
     icon: "💼",
-    desc: "Your youngest child is 6 or under. Federal TANF minimum: 20 hrs/week of work participation.",
+    desc: "Your youngest child is 6 or under. Federal TANF minimum: 20 hrs/week × 4.33 = 87 hrs/month.",
     hoursRequired: 20,
+    monthlyHours: 87,
     color: "#1a3a5c",
   },
   {
     id: "standard30",
     label: "Standard Track — 30 hrs/wk",
     icon: "👨‍👧",
-    desc: "All your children are older than 6. Required participation jumps to 30 hrs/week under federal TANF rules.",
+    desc: "All your children are older than 6. Required participation: 30 hrs/week × 4.33 = 130 hrs/month.",
     hoursRequired: 30,
+    monthlyHours: 130,
     color: "#1a3a5c",
   },
   {
     id: "incapacity",
     label: "Incapacity Track",
     icon: "🩺",
-    desc: "You have a documented medical condition. Navigate modified participation, doctor verification, and reassessments.",
+    desc: "You have a documented medical condition. Modified participation: 10 hrs/week × 4.33 = 43 hrs/month.",
     hoursRequired: 10,
+    monthlyHours: 43,
     color: "#5c1a3a",
   },
   {
     id: "crisis",
     label: "Family Crisis Mode",
     icon: "🏠",
-    desc: "Domestic instability, childcare gaps, and housing uncertainty — on top of everything else.",
+    desc: "Domestic instability, childcare gaps, and housing uncertainty — on top of your 87 hrs/month requirement.",
     hoursRequired: 20,
+    monthlyHours: 87,
     color: "#3a5c1a",
   },
   {
     id: "sanction",
     label: "Sanctions Gauntlet",
     icon: "⚠️",
-    desc: "You start in sanction. Cure it before your benefits are cut further. Clock is ticking.",
+    desc: "You start in sanction. You must hit 130 hrs/month for 2 consecutive months to cure. Clock is ticking.",
     hoursRequired: 30,
+    monthlyHours: 130,
     color: "#5c3a1a",
   },
 ];
@@ -300,11 +305,11 @@ const LIFE_INVASIONS = [
 ];
 
 const RANDOM_EVENTS = [
-  { text: "🚗 Your car broke down. Miss 8 work hours this week.", hoursLost: 8, moraleLoss: 10, type: "crisis" },
+  { text: "🚗 Your car broke down. Miss 8 participation hours this month.", hoursLost: 8, moraleLoss: 10, type: "crisis" },
   { text: "👶 Your child's school called — sick day. You had to stay home.", hoursLost: 6, moraleLoss: 8, type: "crisis" },
-  { text: "🌀 SNAP recertification due — extra paperwork this week.", hoursLost: 3, moraleLoss: 5, type: "admin" },
+  { text: "🌀 SNAP recertification due — extra paperwork this month.", hoursLost: 3, moraleLoss: 5, type: "admin" },
   { text: "📋 Coach scheduled an unannounced compliance check.", hoursLost: 0, moraleLoss: 5, type: "admin" },
-  { text: "💼 Employer offered extra hours this week! +6 bonus hours.", hoursLost: -6, moraleLoss: -5, type: "good" },
+  { text: "💼 Employer offered extra hours this month! +6 bonus hours.", hoursLost: -6, moraleLoss: -5, type: "good" },
   { text: "🎉 You completed a goal early! Coach gave you a shout-out.", hoursLost: 0, moraleLoss: -15, type: "good" },
   { text: "🏠 Landlord raised rent. Stress is high.", hoursLost: 0, moraleLoss: 15, type: "crisis" },
   { text: "⚡ Power got cut off. Hard to focus on job apps.", hoursLost: 4, moraleLoss: 12, type: "crisis" },
@@ -313,11 +318,11 @@ const RANDOM_EVENTS = [
 ];
 
 const INCAPACITY_EVENTS = [
-  { text: "📄 Doctor's note expired. Need new 3rd-party verification within 7 days.", hoursLost: 0, moraleLoss: 15, type: "admin" },
-  { text: "🏥 Flare-up today. You can only complete light activities.", hoursLost: 5, moraleLoss: 10, type: "crisis" },
+  { text: "📄 Doctor's note expired. Need new 3rd-party verification within 10 days.", hoursLost: 0, moraleLoss: 15, type: "admin" },
+  { text: "🏥 Flare-up this month. You can only complete light activities.", hoursLost: 15, moraleLoss: 10, type: "crisis" },
   { text: "✅ Incapacity reassessment completed successfully. Status confirmed.", hoursLost: 0, moraleLoss: -10, type: "good" },
   { text: "📋 ABAWD/disability review triggered. Must respond within 10 days.", hoursLost: 0, moraleLoss: 20, type: "admin" },
-  { text: "💊 New treatment plan — physical therapy 2x week. Hours adjusted.", hoursLost: 3, moraleLoss: 0, type: "admin" },
+  { text: "💊 New treatment plan — physical therapy 2x/week. Hours adjusted.", hoursLost: 8, moraleLoss: 0, type: "admin" },
 ];
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
@@ -565,7 +570,7 @@ function ModeSelect({ onSelect }) {
                       padding: "2px 6px",
                     }}
                   >
-                    {m.hoursRequired} hrs/wk min
+                    {m.monthlyHours} hrs/month required
                   </span>
                 </div>
                 <div style={{ fontSize: 13, color: "#7a8a9a", lineHeight: 1.5 }}>{m.desc}</div>
@@ -743,7 +748,7 @@ function FSABuilder({ participant, onComplete }) {
           </div>
           <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
             <Badge text={`Track: ${participant.mode.label}`} color="#f0a500" />
-            <Badge text={`${participant.mode.hoursRequired} hrs/wk required`} color="#4a9af0" />
+            <Badge text={`${participant.mode.monthlyHours} hrs/month required`} color="#4a9af0" />
             <Badge text={`${participant.barriers.length} barriers identified`} color="#f04a4a" />
           </div>
         </div>
@@ -1737,25 +1742,25 @@ function ComplianceBoss({ mode, onFinish }) {
 }
 
 function GamePlay({ participant, fsa, onGameOver }) {
-  const totalWeeks = 12;
-  const [week, setWeek] = useState(1);
+  const totalMonths = 6;
+  const [month, setMonth] = useState(1);
   const [hours, setHours] = useState(0);
   const [morale, setMorale] = useState(75);
   const [compliance, setCompliance] = useState(participant.mode.id === "sanction" ? 30 : 100);
   const [goals, setGoals] = useState(fsa.goals.map((g) => ({ ...g, progress: 0, completed: false })));
   const [event, setEvent] = useState(null);
   const [log, setLog] = useState([]);
-  const [phase, setPhase] = useState("weekly"); // weekly | event | review
-  const [weeklyHours, setWeeklyHours] = useState(0);
+  const [phase, setPhase] = useState("monthly");
+  const [monthlyHoursLogged, setMonthlyHoursLogged] = useState(0);
   const [totalPoints, setTotalPoints] = useState(0);
   const [activities, setActivities] = useState({});
   const [activeQuest, setActiveQuest] = useState(null);
   const [questBonusHours, setQuestBonusHours] = useState(0);
   const [bossActive, setBossActive] = useState(false);
-  const [bossTriggered, setBossTriggered] = useState(false); // only once per week-6+
+  const [bossTriggered, setBossTriggered] = useState(false);
   const [sanctionWarning, setSanctionWarning] = useState(participant.mode.id === "sanction");
 
-  const required = participant.mode.hoursRequired;
+  const required = participant.mode.monthlyHours;
 
   const getRandomEvent = () => {
     const pool =
@@ -1765,11 +1770,11 @@ function GamePlay({ participant, fsa, onGameOver }) {
     return pool[Math.floor(Math.random() * pool.length)];
   };
 
-  const submitWeek = () => {
+  const submitMonth = () => {
     const ev = getRandomEvent();
     setEvent(ev);
 
-    const adjustedHours = Math.max(0, weeklyHours + questBonusHours + (ev.hoursLost || 0));
+    const adjustedHours = Math.max(0, monthlyHoursLogged + questBonusHours + (ev.hoursLost || 0));
     const newMorale = Math.max(0, Math.min(100, morale - (ev.moraleLoss || 0)));
     const metHours = adjustedHours >= required;
 
@@ -1780,7 +1785,6 @@ function GamePlay({ participant, fsa, onGameOver }) {
 
     const newHours = hours + adjustedHours;
 
-    // Goal progress
     const selectedGoalIds = Object.keys(activities).filter((k) => activities[k]);
     const updatedGoals = goals.map((g) => {
       if (selectedGoalIds.includes(g.id)) {
@@ -1801,33 +1805,32 @@ function GamePlay({ participant, fsa, onGameOver }) {
     setCompliance(newCompliance);
     setGoals(updatedGoals);
     setLog((prev) => [
-      `Week ${week}: ${adjustedHours} hrs logged. Compliance: ${newCompliance}%. ${ev.type === "good" ? "✅" : "⚠️"} ${ev.text.slice(2)}`,
+      `Month ${month}: ${adjustedHours} hrs logged. Compliance: ${newCompliance}%. ${ev.type === "good" ? "✅" : "⚠️"} ${ev.text.slice(2)}`,
       ...prev,
     ]);
     setPhase("event");
   };
 
-  const advanceWeek = () => {
-    if (week >= totalWeeks) {
-      onGameOver({ goals, compliance, morale, totalPoints, hours, week });
+  const advanceMonth = () => {
+    if (month >= totalMonths) {
+      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month });
       return;
     }
     if (compliance <= 0) {
-      onGameOver({ goals, compliance, morale, totalPoints, hours, week, reason: "terminated" });
+      onGameOver({ goals, compliance, morale, totalPoints, hours, week: month, reason: "terminated" });
       return;
     }
-    const nextWeek = week + 1;
-    setWeek(nextWeek);
-    setWeeklyHours(0);
+    const nextMonth = month + 1;
+    setMonth(nextMonth);
+    setMonthlyHoursLogged(0);
     setQuestBonusHours(0);
     setActivities({});
     setEvent(null);
-    setPhase("weekly");
+    setPhase("monthly");
     setSanctionWarning(false);
-    // Check if boss should fire on this new week
-    if (shouldTriggerBoss(nextWeek)) {
+    if (shouldTriggerBoss(nextMonth)) {
       setBossTriggered(true);
-      setTimeout(() => setBossActive(true), 400); // slight delay for drama
+      setTimeout(() => setBossActive(true), 400);
     }
   };
 
@@ -1854,15 +1857,15 @@ function GamePlay({ participant, fsa, onGameOver }) {
     setMorale((m) => Math.min(100, m + (passed ? 10 : -10)));
     setBossActive(false);
     setLog((prev) => [
-      `Week ${week}: Compliance Review — ${passed ? "PASSED ✅" : "FAILED ⚠️"} (${complianceGain > 0 ? "+" : ""}${complianceGain}% compliance)`,
+      `Month ${month}: Compliance Review — ${passed ? "PASSED ✅" : "FAILED ⚠️"} (${complianceGain > 0 ? "+" : ""}${complianceGain}% compliance)`,
       ...prev,
     ]);
   };
 
   // Trigger boss at week 6 (or week 4 in sanction) if not already done
-  const shouldTriggerBoss = (currentWeek) =>
+  const shouldTriggerBoss = (currentMonth) =>
     !bossTriggered && (
-      currentWeek === (participant.mode.id === "sanction" ? 4 : 6) ||
+      currentMonth === (participant.mode.id === "sanction" ? 2 : 3) ||
       (compliance < 40 && !bossTriggered)
     );
 
@@ -1919,7 +1922,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
               📋 {participant.name}'s Case
             </div>
             <div style={{ fontSize: 11, color: "#556" }}>
-              {participant.mode.label} · Week {week} of {totalWeeks}
+              {participant.mode.label} · Month {month} of {totalMonths}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -1940,7 +1943,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
           {[
             { label: "Compliance", val: compliance, max: 100, color: compliance > 60 ? "#4aaf70" : "#f04a4a" },
             { label: "Morale", val: morale, max: 100, color: morale > 40 ? "#4a9af0" : "#f0a500" },
-            { label: "Hours (total)", val: hours, max: required * totalWeeks, color: "#f0a500" },
+            { label: "Hours (total)", val: hours, max: required * totalMonths, color: "#f0a500" },
           ].map(({ label, val, max, color }) => (
             <div key={label} style={{ background: "#111827", borderRadius: 10, padding: "12px 14px" }}>
               <div style={{ fontSize: 11, color: "#556", marginBottom: 6 }}>{label}</div>
@@ -1963,7 +1966,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             }}
           >
             ⚠️ <strong>You are currently in SANCTION.</strong> Your benefits are reduced. You must meet{" "}
-            {required} hrs/wk for 4 consecutive weeks to cure. Every missed week deepens the cut.
+            {required} hrs/month for 2 consecutive months to cure. Every missed month deepens the cut.
           </div>
         )}
 
@@ -1983,7 +1986,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
             </div>
             <div style={{ fontSize: 14, lineHeight: 1.6, color: "#c8d0d8" }}>{event.text}</div>
             <button
-              onClick={advanceWeek}
+              onClick={advanceMonth}
               style={{
                 marginTop: 14,
                 background: "linear-gradient(90deg, #f0a500, #d4900a)",
@@ -1996,13 +1999,13 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 cursor: "pointer",
               }}
             >
-              Continue to Week {Math.min(week + 1, totalWeeks)} →
+              Continue to Month {Math.min(month + 1, totalMonths)} →
             </button>
           </div>
         )}
 
         {/* Weekly work phase */}
-        {phase === "weekly" && (
+        {phase === "monthly" && (
           <>
             <div
               style={{
@@ -2013,41 +2016,41 @@ function GamePlay({ participant, fsa, onGameOver }) {
               }}
             >
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12, color: "#f0a500" }}>
-                Week {week} — Log Your Hours
+                Month {month} — Log Your Hours
               </div>
               <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 10 }}>
-                Required: <strong style={{ color: "#e8eaf0" }}>{required} hrs</strong> this week
+                Required: <strong style={{ color: "#e8eaf0" }}>{required} hrs</strong> this month
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                 <button
-                  onClick={() => setWeeklyHours((h) => Math.max(0, h - 4))}
+                  onClick={() => setMonthlyHoursLogged((h) => Math.max(0, h - 8))}
                   style={{ ...btnStyle, background: "#1a2535", fontSize: 18, width: 36, height: 36 }}
                 >
                   −
                 </button>
                 <div style={{ textAlign: "center", minWidth: 80 }}>
-                  <div style={{ fontSize: 32, fontWeight: 800, color: weeklyHours >= required ? "#4aaf70" : "#f04a4a" }}>
-                    {weeklyHours}
+                  <div style={{ fontSize: 32, fontWeight: 800, color: monthlyHoursLogged >= required ? "#4aaf70" : "#f04a4a" }}>
+                    {monthlyHoursLogged}
                   </div>
                   <div style={{ fontSize: 10, color: "#556" }}>hours logged</div>
                 </div>
                 <button
-                  onClick={() => setWeeklyHours((h) => Math.min(40, h + 4))}
+                  onClick={() => setMonthlyHoursLogged((h) => Math.min(200, h + 8))}
                   style={{ ...btnStyle, background: "#1a2535", fontSize: 18, width: 36, height: 36 }}
                 >
                   +
                 </button>
                 <div style={{ fontSize: 11, color: "#556", marginLeft: 8, lineHeight: 1.5 }}>
-                  Tap to adjust<br />in 4-hr blocks
+                  Tap to adjust<br />in 8-hr blocks
                 </div>
               </div>
 
               <ProgressBar
-                value={weeklyHours}
+                value={monthlyHoursLogged}
                 max={required}
-                color={weeklyHours >= required ? "#4aaf70" : "#f0a500"}
-                label="Weekly Hour Target"
+                color={monthlyHoursLogged >= required ? "#4aaf70" : "#f0a500"}
+                label="Monthly Hour Target"
               />
             </div>
 
@@ -2059,7 +2062,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
               <div style={{ fontSize: 12, color: "#7a8a9a", marginBottom: 12 }}>
                 Play a quest to make progress and earn bonus participation hours.
                 {questBonusHours > 0 && (
-                  <span style={{ color: "#4aaf70" }}> &nbsp;(+{questBonusHours} bonus hrs this week)</span>
+                  <span style={{ color: "#4aaf70" }}> &nbsp;(+{questBonusHours} bonus hrs this month)</span>
                 )}
               </div>
               {goals.map((g) => (
@@ -2108,21 +2111,15 @@ function GamePlay({ participant, fsa, onGameOver }) {
             </div>
 
             {/* Compliance Review incoming banner */}
-            {!bossTriggered && (week === (participant.mode.id === "sanction" ? 3 : 5)) && (
+            {!bossTriggered && (month === (participant.mode.id === "sanction" ? 1 : 2)) && (
               <div style={{
-                background: "#1a0a04",
-                border: "1px solid #f04a4a66",
-                borderRadius: 10,
-                padding: "12px 16px",
-                marginBottom: 14,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
+                background: "#1a0a04", border: "1px solid #f04a4a66", borderRadius: 10,
+                padding: "12px 16px", marginBottom: 14,
+                display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
               }}>
                 <div>
                   <div style={{ fontSize: 12, color: "#f04a4a", fontWeight: 700, marginBottom: 2 }}>⚠ COMPLIANCE REVIEW INCOMING</div>
-                  <div style={{ fontSize: 12, color: "#9a7a6a" }}>A full audit is scheduled for Week {participant.mode.id === "sanction" ? 4 : 6}. Make sure your documents are ready.</div>
+                  <div style={{ fontSize: 12, color: "#9a7a6a" }}>A full audit is scheduled for Month {participant.mode.id === "sanction" ? 2 : 3}. Make sure your documentation is ready.</div>
                 </div>
               </div>
             )}
@@ -2165,15 +2162,15 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 <div style={{ fontSize: 13, color: "#9aa8b8", lineHeight: 1.5 }}>
                   {compliance < 40
                     ? "Your compliance is critically low. You need to pass the audit before your case is at risk of termination."
-                    : weeklyHours < required
-                    ? `You still need ${required - weeklyHours} more hours to meet your weekly requirement. Don't let a gap become a sanction.`
-                    : `Great work — you've met your ${required}-hour requirement for week ${week}. Keep the momentum going.`}
+                    : monthlyHoursLogged < required
+                    ? `You still need ${required - monthlyHoursLogged} more hours to meet your monthly requirement. Don't let a gap become a sanction.`
+                    : `Great work — you've met your ${required}-hour monthly requirement for Month ${month}. Keep the momentum going.`}
                 </div>
               </div>
             </div>
 
             <button
-              onClick={submitWeek}
+              onClick={submitMonth}
               style={{
                 width: "100%",
                 background: "linear-gradient(90deg, #f0a500, #d4900a)",
@@ -2186,7 +2183,7 @@ function GamePlay({ participant, fsa, onGameOver }) {
                 cursor: "pointer",
               }}
             >
-              Submit Week {week} Check-In →
+              Submit Month {month} Check-In →
             </button>
           </>
         )}
@@ -2274,7 +2271,7 @@ function GameOver({ result, onRestart, onLeaderboard }) {
           <div style={{ fontSize:13, color:"#7a8a9a", marginBottom:14 }}>CASE SUMMARY</div>
           {[
             { label:"Total Points",      val: result.totalPoints },
-            { label:"Weeks Completed",   val: `${result.week} / 12` },
+            { label:"Weeks Completed",   val: `${result.week} / 6 months` },
             { label:"Total Hours Logged",val: result.hours },
             { label:"Final Compliance",  val: `${result.compliance}%` },
             { label:"Goals Achieved",    val: `${completedGoals.length} / ${result.goals.length}` },
